@@ -1,0 +1,7 @@
+gamspy==49.6.1
+numpy
+pandas
+matplotlib
+seaborn
+jupyter
+ipykernel
