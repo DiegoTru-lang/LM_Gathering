@@ -1,4 +1,4 @@
-gamspy==49.6.1
+gamspy
 numpy
 pandas
 matplotlib
