@@ -1,8 +1,9 @@
 from .data_classes import DataClass
+# from .data_classes.utils.model_mappings import ModelSetMapping
 from gamspy import Container, Set, Parameter, Variable, Alias, Model, Sense, Options, Problem
 from .equations import mass_balances, costs_computation, capacity_constraints
 
-class Model():
+class GatheringModel():
     def __init__(self, model_name: str, data: DataClass = None):
         self.model_name = model_name
         self.m = self._construct_model()
@@ -31,7 +32,7 @@ class Model():
         # Parameters
 
         q_prod = Parameter(m, "Qprod", domain=[i,t,c], description="Production at source node 'i' of component 'c' during time period 't' [mscf per day]")
-        st_time = Parameter(m, "st_time", domain=i, description="Production start time of source node 'i' ")
+        st_time = Parameter(m, "st_time", domain=i, description="Production start time of source node 'i' ") #TODO: Compute based on q_prod
         capacity = Parameter(m, "capacity", domain=[s, c], description="Capacity for facility size 's' and component 'c' [mscf per day]")
         facility_cost_size = Parameter(m, "facility_cost_size", domain=s, description="Cost for facility size 's' [$]")
         # install_facility_cost = Parameter(m, "install_facility_cost", domain=pf, description="Cost for installing a facility in node 'pf' [$]")
@@ -79,19 +80,30 @@ class Model():
         eqs += costs_computation(m)
         eqs += capacity_constraints(m)
 
-        model = Model(m, 
-                      "Two-echelon Multiphase Pipeline network design model",
-                      equations=eqs,
-                      sense=Sense.MIN,
-                      problem=Problem.MIP,
-                      objective=total_cost,
-                      options=Options.SOLVER="gurobi",)
+        model = Model(
+            m,
+            "Multiphase_network_design",
+            # equations=eqs,
+            equations=m.getEquations(),
+            sense=Sense.MIN,
+            problem=Problem.MIP,
+            objective=total_cost,
+            # options=Options(mip="gurobi"),
+        )
 
         return m
 
     def instance_model(self, data: DataClass):
-        self.m.i.set_records()
-    
+        # Automatically set records for all sets/parameters defined in ModelSetMapping
+        # for mapping in ModelSetMapping:
+        #     model_attr, data_key = mapping.value
+        #     if hasattr(self.m, model_attr):
+        #         getattr(self.m, model_attr).set_records(data.data.get(data_key))
+        return ...
+
+    def compute_first_echelon_parameters(self):
+        ...
+
     def solve(self):
         ...
 
