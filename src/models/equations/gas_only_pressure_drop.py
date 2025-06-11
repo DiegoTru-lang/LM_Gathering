@@ -10,6 +10,7 @@ def gas_only_pressure_drop(m: Container) -> list[Equation]:
     arcs = m["arcs"]
     deltaPgas = m["deltaPgas"]
     press = m["press"]
+    cpipe_km = m["cpipe_km"]
 
     weymouth_correlation = Equation(m, "weymouth_correlation", domain=[n,nn,t], description=" Weymouth correlation for gas-only pressure drop between nodes 'n' and 'nn' during time period 't' [MPa]")
     weymouth_correlation[n,nn,t].where[arcs[n,nn]] =  deltaPgas[n, nn, t] == press[n,t] - Sum(d, cpipe_km[d]*Sum(Domain(n,nn).where[arcs[n, nn]], dist[n,nn]*x_bar[n,nn,d,t]))

@@ -1,6 +1,6 @@
 from .data_classes import DataClass
-from gamspy import Container, Set, Parameter, Variable, Alias, Model, Sense, Options
-from .equations import mass_balances, costs_computation
+from gamspy import Container, Set, Parameter, Variable, Alias, Model, Sense, Options, Problem
+from .equations import mass_balances, costs_computation, capacity_constraints
 
 class Model():
     def __init__(self, model_name: str, data: DataClass = None):
@@ -23,6 +23,7 @@ class Model():
         arcs = Set(m, "arcs", domain=[n,nn], description="Allowed connections") 
         
         t = Set(m, "t", description="Time periods")
+        tt = Alias(m, name="tt", alias_with=t)
         c = Set(m, "c", description="Flow components")
         d = Set(m, "d", description="Pipeline diameter options")
         s = Set(m, "s", description="Facility sizes")
@@ -32,7 +33,7 @@ class Model():
         q_prod = Parameter(m, "Qprod", domain=[i,t,c], description="Production at source node 'i' of component 'c' during time period 't' [mscf per day]")
         st_time = Parameter(m, "st_time", domain=i, description="Production start time of source node 'i' ")
         capacity = Parameter(m, "capacity", domain=[s, c], description="Capacity for facility size 's' and component 'c' [mscf per day]")
-        facility_cost = Parameter(m, "facility_cost", domain=s, description="Cost for facility size 's' [$]")
+        facility_cost_size = Parameter(m, "facility_cost_size", domain=s, description="Cost for facility size 's' [$]")
         # install_facility_cost = Parameter(m, "install_facility_cost", domain=pf, description="Cost for installing a facility in node 'pf' [$]")
         cpipe = Parameter(m, "cpipe", description="Pipeline cost per inch per km [$/(in*km)]")
         mult_pipe = Parameter(m, "mult_pipe", domain=d, description="Multiplier for pipeline of diameter 'd'")
@@ -46,6 +47,7 @@ class Model():
         loc_y = Parameter(m, "loc_y", domain=n, description="Position of node 'n' in y-axis [km]")
         dist = Parameter(m, "dist", domain=[n,nn], description="Distance between nodes'n'to 'nn' [km]")
 
+        maxFlow = Parameter(m, "maxFlow", domain=[c,t], description="Maximum flow of component 'c' during time period 't' [mscf per day]") # TODO: Compute as sum of production at all source nodes
         pwell = Parameter(m, "pwell", domain=[i,t], description="Wellhead pressure per source node 'i' at time period 't' [MPa]")
         pmin_pf = Parameter(m, "pmin_pf", description="Minimum inlet pressure at processing facility [MPa]")
         
@@ -68,20 +70,23 @@ class Model():
         deltaPliq = Variable(m, "deltaPliq", domain=[n, nn, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
 
         pipe_cost = Variable(m, "pipe_cost", domain=t, description="Total cost on pipeline installation during time period 't' [$]")
+        facility_cost = Variable(m, "facility_cost", domain=t, description="Total cost on facility installation during time period 't' [$]")
+        total_cost = Variable(m, "total_cost", description="Total discounted cost [$]")
         
         # Call equations
         eqs = []
         eqs += mass_balances(m)
         eqs += costs_computation(m)
+        eqs += capacity_constraints(m)
 
+        model = Model(m, 
+                      "Two-echelon Multiphase Pipeline network design model",
+                      equations=eqs,
+                      sense=Sense.MIN,
+                      problem=Problem.MIP,
+                      objective=total_cost,
+                      options=Options.SOLVER="gurobi",)
 
-        # add objective function
-
-        # model = Model(m, "Two-echelon Multiphase Pipeline network design model",
-        #               equations=[...]", # eqs = list_eqs + list_eqs2
-        #               sense=Sense.MIN, options=Options.SOLVER="cplex")
-        #               objective=obj,
-        #               options=Options.SOLVER="cplex")
         return m
 
     def instance_model(self, data: DataClass):

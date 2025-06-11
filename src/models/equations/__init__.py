@@ -1,3 +1,4 @@
 from .mass_balances import mass_balances
 from .costs_computation import costs_computation
 from .gas_only_pressure_drop import gas_only_pressure_drop
+from .capacity import capacity_constraints
