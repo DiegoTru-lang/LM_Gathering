@@ -10,7 +10,7 @@ def costs_computation(m: Container) -> list[Equation]:
     dist = m["dist"]
     arcs = m["arcs"]
 
-    cpipe_km = m["cpipe_km"]
+    diameter_cost = m["diameter_cost"]
     facility_cost_size = m["facility_cost_size"]
     ir = m["ir"]
 
@@ -22,7 +22,7 @@ def costs_computation(m: Container) -> list[Equation]:
     total_cost = m["total_cost"]
 
     compute_pipe_cost = Equation(m, "compute_pipe_cost_per_t", domain=t, description="Compute total pipeline installation cost at period 't' ")
-    compute_pipe_cost[t] =  pipe_cost[t] == Sum(d, cpipe_km[d]*Sum(Domain(n,nn).where[arcs[n, nn]], dist[n,nn]*x_bar[n,nn,d,t]))
+    compute_pipe_cost[t] =  pipe_cost[t] == Sum(d, diameter_cost[d]*Sum(Domain(n,nn).where[arcs[n, nn]], dist[n,nn]*x_bar[n,nn,d,t]))
     
     compute_facility_cost = Equation(m, "compute_facility_cost_per_t", domain=t, description="Compute total facility installation cost at period 't' ")
     compute_facility_cost[t] = facility_cost[t] == Sum([pf,s], facility_cost_size[s]*y_pf[pf, s, t])

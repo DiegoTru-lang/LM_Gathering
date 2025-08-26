@@ -9,5 +9,5 @@ def read_input(excel_filename: str = "parameters.xlsx"):
     params = {}
     excel_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", excel_filename)
     for param in ParameterLocation:
-        params[param.name] = read_parameter_from_excel(excel_path, param.value)
+        params[param.name] = read_parameter_from_excel(excel_path, param.value[0], param.value[1])
     return params
