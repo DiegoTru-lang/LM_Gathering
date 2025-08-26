@@ -7,6 +7,7 @@ class ModelSetMapping(Enum):
     J = ("j", "J")
     PF = ("pf", "PF")
     T = ("t", "T")
+    TT = ("tt", "T")
     # C = ("c", "C")
     D = ("d", "D")
     S = ("s", "S")
