@@ -24,6 +24,6 @@ def mass_balances(m: Container) -> list[Equation]:
     mass_balance[j, c, t] =  Sum(Domain(nn, d).where[arcs[nn, j]], q_inter[nn, j, d, t, c]) == Sum(Domain(nn, d).where[arcs[j, nn]], q_inter[j, nn, d, t, c])
     # mass_balance[pf, c, t] = Sum(Domain(nn, d).where[arcs[nn, pf]], q_inter[nn, pf, d, t, c]) == Sum(Domain(nn, d).where[arcs[pf, nn]], q_inter[pf, nn, d, t, c]) + q_process[pf, t, c]
     mass_balance[pf, c, t] = Sum(Domain(nn, d).where[arcs[nn, pf]], q_inter[nn, pf, d, t, c]) == q_process[pf, t, c]
-    mass_balance[i, c, t].where[Ord(t) >= st_time[i]-1] =  Sum(tt.where[Ord(tt) == (Ord(t) - st_time[i]-1)], q_prod[tt])*fluid_mult[c] == Sum(Domain(nn, d).where[arcs[i, nn]], q_inter[i, nn, d, t, c])
+    mass_balance[i, c, t].where[Ord(t) >= (st_time[i])] =  Sum(tt.where[Ord(tt) == (Ord(t) - st_time[i])], q_prod[tt])*fluid_mult[c] == Sum(Domain(nn, d).where[arcs[i, nn]], q_inter[i, nn, d, t, c])
     
     return [mass_balance]

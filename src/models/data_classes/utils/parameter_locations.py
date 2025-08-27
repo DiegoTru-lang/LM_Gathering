@@ -11,7 +11,7 @@ class ParameterLocation(Enum):
     S = (("Sets", 1, 20, 4, 4), False)
     T = (("Sets", 1, 200, 5, 5), False)
     C = (("Sets", 1, 20, 6, 6), False)
-    A = (("Sets", 1, 20, 8, 9), False)
+    A = (("Sets", 1, 200, 8, 9), False)
     LOC_X = (("Location", 1, 50, 0, 1), False)
     LOC_Y = (("Location", 1, 50, 3, 4), False)
     DIST_IJ = (("Distances", 0, 12, 0, 12), "dist_ij")

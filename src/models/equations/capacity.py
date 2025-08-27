@@ -23,4 +23,5 @@ def capacity_constraints(m: Container) -> list[Equation]:
     pipeline_capacity = Equation(m, "pipeline_capacity", domain=[n, nn, d, t, c], description="A pipeline must be installed to transport flow")
     pipeline_capacity[n,nn,d,t,c] = q_inter[n,nn,d,t,c] <= maxFlow[c,t]*Sum(tt.where[Ord(tt) <= Ord(t)], x_bar[n,nn,d,t])
 
-    return [facility_capacity, pipeline_capacity]
+    # return [facility_capacity, pipeline_capacity]
+    return [pipeline_capacity]

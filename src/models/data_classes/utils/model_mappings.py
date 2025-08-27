@@ -11,7 +11,7 @@ class ModelSetMapping(Enum):
     # C = ("c", "C")
     D = ("d", "D")
     S = ("s", "S")
-    ARCS = ("arcs", "A")
+    # ARCS = ("arcs", "A")
     PROD = ("Qprod", "PROD")
     # GOR = ("gor", "GOR")
     # WOR = ("wor", "WOR")

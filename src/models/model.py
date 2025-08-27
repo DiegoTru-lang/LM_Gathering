@@ -117,6 +117,17 @@ class GatheringModel():
                 continue
             self.m[model_attr].setRecords(data.get(data_key))
 
+        # Hotfix: Allow all connections
+        arcs = []
+        for i in self.m["i"].records["n"]:
+            for j in self.m["j"].records["n"]:
+                arcs.append((i, j))
+
+        for j in self.m["j"].records["n"]:
+            for pf in self.m["pf"].records["n"]:
+                arcs.append((j, pf))
+
+        self.m["arcs"].setRecords(arcs)
 
     def compute_first_echelon_parameters(self):
         ...
