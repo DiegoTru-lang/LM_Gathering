@@ -7,6 +7,7 @@ def costs_computation(m: Container) -> list[Equation]:
     s = m["s"]
     d = m["d"]
     t = m["t"]
+    tp = m["tp"]
     dist = m["dist"]
     arcs = m["arcs"]
 
@@ -22,12 +23,14 @@ def costs_computation(m: Container) -> list[Equation]:
     total_cost = m["total_cost"]
 
     compute_pipe_cost = Equation(m, "compute_pipe_cost_per_t", domain=t, description="Compute total pipeline installation cost at period 't' ")
+    # compute_pipe_cost[t].where[tp[t]] =  pipe_cost[t] == Sum(d, diameter_cost[d]*Sum(Domain(n,nn).where[arcs[n, nn]], dist[n,nn]*x_bar[n,nn,d,t]))
     compute_pipe_cost[t] =  pipe_cost[t] == Sum(d, diameter_cost[d]*Sum(Domain(n,nn).where[arcs[n, nn]], dist[n,nn]*x_bar[n,nn,d,t]))
     
     compute_facility_cost = Equation(m, "compute_facility_cost_per_t", domain=t, description="Compute total facility installation cost at period 't' ")
-    compute_facility_cost[t] = facility_cost[t] == Sum([pf,s], facility_cost_size[s]*y_pf[pf, s, t])
+    compute_facility_cost[t] = facility_cost[t] == 1000*Sum([pf,s], facility_cost_size[s]*y_pf[pf, s, t])
 
     compute_total_cost = Equation(m, "compute_total_cost", description="Compute total discounted cost")
-    compute_total_cost[...] = total_cost == Sum(t, (1 + ir)**(-(Ord(t) - 1)) * (pipe_cost[t] + facility_cost[t]))
+    # compute_total_cost[...] = total_cost == Sum(t.where[tp[t]], (1 + ir)**(-(Ord(t) - 1)) * (pipe_cost[t] + facility_cost[t]))
+    compute_total_cost[...] = total_cost == Sum(t, (1 + ir)**(-(Ord(t) - 1)) * (pipe_cost[t] + facility_cost[t]))/1000
 
     return [compute_pipe_cost, compute_facility_cost, compute_total_cost]

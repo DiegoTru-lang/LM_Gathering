@@ -1,0 +1,73 @@
+--- Job Multiphase_network_design.gms Start 08/28/25 08:40:33 38.3.0 060274e8 WEX-WEI x86 64bit/MS Windows
+--- Applying:
+    C:\GAMS\38\gmsprmNT.txt
+    C:\Users\Diego\Documents\GAMS\gamsconfig.yaml
+--- GAMS Parameters defined
+    Input C:\Users\Diego\Desktop\ExxonMobil\LM_Gathering\src\notebooks\prototipo.gms\Multiphase_network_design.gms
+    PageSize 0
+    ScrDir C:\Users\Diego\Desktop\ExxonMobil\LM_Gathering\src\notebooks\prototipo.gms\225a\
+    SysDir C:\GAMS\38\
+    LogOption 3
+    ErrMsg 1
+    ErrorLog 99
+    IDE 1
+    LstTitleLeftAligned 1
+Licensee: Prof. Ignacio E. Grossmann                     G241203|0002AS-GEN
+          Carnegie Mellon University, Dept. of Chemical Engineering  DCE375
+          C:\Users\Diego\Documents\GAMS\gamslice.txt
+          License Admin: Ignacio E. Grossmann,                             
+          Evaluation license: Not for commercial or production use
+Processor information: 2 socket(s), 12 core(s), and 24 thread(s) available
+GAMS 38.3.0   Copyright (C) 1987-2022 GAMS Development. All rights reserved
+--- Starting compilation
+--- Multiphase_network_design.gms(30) 2 Mb 1 Error
+*** Error 210 in C:\Users\Diego\Desktop\ExxonMobil\LM_Gathering\src\notebooks\prototipo.gms\Multiphase_network_design.gms
+    Unknown dollar control option. Valid are -
+      Error, Debug, EolCom, InlineCom, Eject, Clear
+      onExternalInput, offExternalInput, onExternalOutput
+      offExternalOutput, onIDCProtect, offIDCProtect, onMargin
+      offMargin, minCol, maxCol, comment, dollar, onDigit
+      offDigit, hidden, onText, offText, onUpper, offUpper, single
+      double, lines, title, sTitle, onSymList, offSymList
+      onUelList, offUelList, onSymXRef, offSymXRef, onUelXRef
+      offUelXRef, onDollar, offDollar, phantom, version, call
+      callAsync, callAsyncIC, callAsyncNC, hiddenCall, include
+      onInclude, offInclude, sysInclude, libInclude, insert
+      sysInsert, libInsert, batInclude, onCmsIncl, offCmsIncl
+      funcLibIn, goto, label, maxGoTo, if, ifI, ifE, shift
+      onNestCom, offNestCom, onInline, offInline, onEolCom
+      offEolCom, onMultiR, onMulti, offMulti, onWarning
+      offWarning, onSparse, offSparse, stars, onMixed, offMixed
+      onRecurse, offRecurse, onUni, offUni, onEps, offEps
+      onEpsToZero, offEpsToZero, onDelim, offDelim, onEmpty
+      offEmpty, onStrictSingleton, offStrictSingleton, onEnd
+      offEnd, onListing, offListing, abort, kill, slice, offLog
+      onLog, onTroll, offTroll, onOrder, offOrder, embeddedCode
+      embeddedCodeS, embeddedCodeV, pauseEmbeddedCode
+      continueEmbeddedCode, continueEmbeddedCodeS
+      continueEmbeddedCodeV, endEmbeddedCode, onEmbeddedCode
+      onEmbeddedCodeS, onEmbeddedCodeV, offEmbeddedCode
+      embeddedFree, scratchFileName, onCheckErrorLevel
+      offCheckErrorLevel, onFiltered, offFiltered, onSuffixDLVars
+      offSuffixDLVars, onFold, offFold, gdxIn, gdxOut, gdxLoad
+      gdxUnload, load, loadR, loadM, loadDc, loadDcR, loadDcM
+      loadFiltered, loadFilteredR, loadFilteredM, loadIdx, unload
+      setLocal, setGlobal, set, evalLocal, evalGlobal, eval
+      setEnv, dropLocal, dropGlobal, drop, dropEnv, setArgs
+      setNames, splitOption, setComps, escape, onGlobal, offGlobal
+      setDdList, prefixPath, show, showFiles, showMacros
+      showVariables, macro, onMacro, offMacro, onDotL, offDotL
+      onExpand, offExpand, offLocal, onLocal, onDotScale
+      offDotScale, expose, protect, hide, purge, compress, encrypt
+      decompress, run, stop, exit, log, echo, echoN, use205
+      use225, use999, diff, onEcho, onEchoV, onEchoS, offEcho
+      onPut, onPutV, onPutS, offPut, clearError, clearErrors
+      warning, terminate, remark, onUndf, offUndf, onEmbedded
+      offEmbedded, onVerbatim, offVerbatim, ifThen, ifThenI
+      ifThenE, elseIf, elseIfI, elseIfE, else, endIf
+--- Multiphase_network_design.gms(36) 2 Mb 2 Errors
+*** Error 257 in C:\Users\Diego\Desktop\ExxonMobil\LM_Gathering\src\notebooks\prototipo.gms\Multiphase_network_design.gms
+    Solve statement not checked because of previous errors
+--- Multiphase_network_design.gms(36) 2 Mb 2 Errors
+*** Status: Compilation error(s)
+--- Job Multiphase_network_design.gms Stop 08/28/25 08:40:33 elapsed 0:00:00.079

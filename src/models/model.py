@@ -1,17 +1,19 @@
 from .data_classes import DataClass
 from .data_classes.utils.model_mappings import ModelSetMapping
-from gamspy import Container, Set, Sum, Parameter, Variable, Alias, Model, Sense, Options, Problem
+from gamspy import Container, Set, Sum, Parameter, Variable, Alias, Model, Sense, Ord, Options, Problem
 from .equations import mass_balances, costs_computation, capacity_constraints
+import sys
 
 class GatheringModel():
     def __init__(self, model_name: str, data: DataClass = None):
         self.model_name = model_name
         self.m = self._construct_model()
         if data:
+            self.data = data
             self.instance_model(data)
 
     def _construct_model(self) -> Container:
-        m = Container()
+        m = Container(output=sys.stdout)
 
         # Sets
 
@@ -25,6 +27,7 @@ class GatheringModel():
         
         t = Set(m, "t", description="Time periods")
         tt = Alias(m, name="tt", alias_with=t)
+        tp = Set(m, "tp", domain=t,description="Time periods where there is a production peak")
         c = Set(m, "c", records=["oil", "gas", "water"], description="Flow components")
         d = Set(m, "d", description="Pipeline diameter options")
         s = Set(m, "s", description="Facility sizes")
@@ -36,8 +39,8 @@ class GatheringModel():
         st_time = Parameter(m, "st_time", domain=i, description="Production start time of source node 'i' ") #TODO: Compute based on q_prod
         capacity = Parameter(m, "capacity", domain=[s, c], description="Capacity for facility size 's' and component 'c' [mscf per day]")
         diam = Parameter(m, "diam", domain=d, description="Diameter of pipeline option 'd' [inches]")
-        facility_cost_size = Parameter(m, "facility_cost_size", domain=s, description="Cost for facility size 's' [$]")
-        diameter_cost = Parameter(m, "diameter_cost", domain=d, description="Pipeline cost per km for diameter size 'd' [$/mile]")
+        facility_cost_size = Parameter(m, "facility_cost_size", domain=s, description="Cost for facility size 's' [MMUSD]")
+        diameter_cost = Parameter(m, "diameter_cost", domain=d, description="Pipeline cost per km for diameter size 'd' [kUSD/mile]")
         # install_facility_cost = Parameter(m, "install_facility_cost", domain=pf, description="Cost for installing a facility in node 'pf' [$]")
         # cpipe = Parameter(m, "cpipe", description="Pipeline cost per inch per km [$/(in*km)]")
         # mult_pipe = Parameter(m, "mult_pipe", domain=d, description="Multiplier for pipeline of diameter 'd'")
@@ -55,7 +58,6 @@ class GatheringModel():
         fluid_mult["gas"] = 2
         fluid_mult["water"] = 3.5
         maxFlow = Parameter(m, "maxFlow", domain=[c,t], description="Maximum flow of component 'c' during time period 't' [mscf per day]") # TODO: Compute as sum of production at all source nodes
-        maxFlow[c,t] = Sum(i, q_prod[t])*fluid_mult[c]
         # pwell = Parameter(m, "pwell", domain=[i,t], description="Wellhead pressure per source node 'i' at time period 't' [MPa]")
         pwell = Parameter(m, "pwell", domain=t, description="Wellhead pressure at every node at time period 't' [MPa]")
         pmin_pf = Parameter(m, "pmin_pf", description="Minimum inlet pressure at processing facility [MPa]")
@@ -71,17 +73,18 @@ class GatheringModel():
         # xnf = Variable(m, "xnf", domain=[n, nn, d, t], type="binary", description="Equals 1 if no pipeline segment of diameter 'd' is installed between 'n' and 'nn' and P(n) <= P(nn) at time period 't'")
         # xnr = Variable(m, "xnr", domain=[n, nn, d, t], type="binary", description="Equals 1 if a pipeline segment of diameter 'd' between nodes 'n' and 'nn' is installed at time period 't'")
         
-        q_inter = Variable(m, "Qinter", domain=[n, nn, d, t, c], description="Flow of component 'c' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [mscf per day]")
-        q_process = Variable(m, "Qprocess", domain=[pf, t, c], description="Amount of component 'c' processed at facility 'pf' during time period 't' [mscf per day]")
-        press = Variable(m, "press", domain=[n, t], description="Pressure at node 'n' during time period 't' [MPa]")
-        deltaP = Variable(m, "deltaP", domain=[n, nn, t], description="Pressure drop 'multiphase' between nodes 'n' and 'nn' during time period 't' [MPa]")
-        deltaPgas = Variable(m, "deltaPgas", domain=[n, nn, t], description="Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
-        deltaPliq = Variable(m, "deltaPliq", domain=[n, nn, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
+        q_inter = Variable(m, "Qinter", type="positive", domain=[n, nn, d, t, c], description="Flow of component 'c' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [mscf per day]")
+        q_process = Variable(m, "Qprocess", type="positive", domain=[pf, t, c], description="Amount of component 'c' processed at facility 'pf' during time period 't' [mscf per day]")
+        press = Variable(m, "press", type="positive", domain=[n, t], description="Pressure at node 'n' during time period 't' [MPa]")
+        deltaP = Variable(m, "deltaP", type="positive", domain=[n, nn, t], description="Pressure drop 'multiphase' between nodes 'n' and 'nn' during time period 't' [MPa]")
+        deltaPgas = Variable(m, "deltaPgas", type="positive", domain=[n, nn, t], description="Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
+        deltaPliq = Variable(m, "deltaPliq", type="positive", domain=[n, nn, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
 
-        pipe_cost = Variable(m, "pipe_cost", domain=t, description="Total cost on pipeline installation during time period 't' [$]")
-        facility_cost = Variable(m, "facility_cost", domain=t, description="Total cost on facility installation during time period 't' [$]")
-        total_cost = Variable(m, "total_cost", description="Total discounted cost [$]")
-        
+        accumulated_capacity = Variable(m, "accumulated_capacity", type="positive", domain=[pf, t, c], description="Total accumulated capacity at processing facility 'pf' of component 'c' during time period 't' [mscf per day]")
+        pipe_cost = Variable(m, "pipe_cost", type="positive", domain=t, description="Total cost on pipeline installation during time period 't' [kUSD]")
+        facility_cost = Variable(m, "facility_cost", type="positive", domain=t, description="Total cost on facility installation during time period 't' [kUSD]")
+        total_cost = Variable(m, "total_cost", type="free", description="Total discounted cost [MMUSD]")
+
         # Call equations
         eqs = []
         eqs += mass_balances(m)
@@ -91,8 +94,8 @@ class GatheringModel():
         model = Model(
             m,
             "Multiphase_network_design",
-            # equations=eqs,
-            equations=m.getEquations(),
+            equations=eqs,
+            # equations=m.getEquations(),
             sense=Sense.MIN,
             problem=Problem.MIP,
             objective=total_cost,
@@ -127,7 +130,25 @@ class GatheringModel():
             for pf in self.m["pf"].records["n"]:
                 arcs.append((j, pf))
 
+
         self.m["arcs"].setRecords(arcs)
+        self.m["tp"].setRecords([f"t{int(i)}" for i in list(self.m["st_time"].records["value"].unique())])
+        self.instance_maxFlow()
+        i = self.m["i"]
+        self.m["Qinter"].fx[i, self.m["nn"], self.m["d"], self.m["t"], self.m["c"]].where[Ord(self.m["t"]) < self.m["st_time"][i]] = 0
+
+
+    def instance_maxFlow(self):
+        """
+        Placeholder for now
+        """
+        maxFlow = self.m["maxFlow"]
+        q_prod = self.m["Qprod"]
+        fluid_mult = self.m["fluid_mult"]
+        i = self.m["i"]
+        c = self.m["c"]
+        t = self.m["t"]
+        maxFlow[c,t] = Sum(i, q_prod[t])*fluid_mult[c]
 
     def compute_first_echelon_parameters(self):
         ...
