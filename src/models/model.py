@@ -57,10 +57,14 @@ class GatheringModel():
         fluid_mult["oil"] = 1
         fluid_mult["gas"] = 2
         fluid_mult["water"] = 3.5
+        kw = Parameter(m, "kw", domain=[n,nn,d], description="Weymouth constants and parameters synthesized")
         maxFlow = Parameter(m, "maxFlow", domain=[c,t], description="Maximum flow of component 'c' during time period 't' [mscf per day]") # TODO: Compute as sum of production at all source nodes
         # pwell = Parameter(m, "pwell", domain=[i,t], description="Wellhead pressure per source node 'i' at time period 't' [MPa]")
         pwell = Parameter(m, "pwell", domain=t, description="Wellhead pressure at every node at time period 't' [MPa]")
         pmin_pf = Parameter(m, "pmin_pf", description="Minimum inlet pressure at processing facility [MPa]")
+        # fixPress = Parameter(m, "fixPress", domain=[n, nn, t], description="Pre-computed max pressure at junction 'j' during time period 't' if connection (i, j) is installed [MPa]")
+        fixPress = Parameter(m, "fixPress", domain=[i, j, t], description="Pre-computed max pressure at junction 'j' during time period 't' if connection (i, j) is installed [MPa]")
+        maxPress = Parameter(m, "maxPress", description="Max pressure at node [MPa]")
         
         # Variables
 
@@ -76,6 +80,9 @@ class GatheringModel():
         q_inter = Variable(m, "Qinter", type="positive", domain=[n, nn, d, t, c], description="Flow of component 'c' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [mscf per day]")
         q_process = Variable(m, "Qprocess", type="positive", domain=[pf, t, c], description="Amount of component 'c' processed at facility 'pf' during time period 't' [mscf per day]")
         press = Variable(m, "press", type="positive", domain=[n, t], description="Pressure at node 'n' during time period 't' [MPa]")
+        pressSQ = Variable(m, "pressSQ", type="positive", domain=[n, t], description="Squared pressure at node 'n' during time period 't' [MPa]")
+        # pressGAS = Variable(m, "pressGAS", type="positive", domain=[n, t], description="Pressure at node 'n' during time period 't' assuming gas-only pressure drop [MPa]")
+        pressGAS = Variable(m, "pressGAS", type="positive", domain=[pf, t], description="Pressure at node 'pf' during time period 't' assuming gas-only pressure drop [MPa]")
         deltaP = Variable(m, "deltaP", type="positive", domain=[n, nn, t], description="Pressure drop 'multiphase' between nodes 'n' and 'nn' during time period 't' [MPa]")
         deltaPgas = Variable(m, "deltaPgas", type="positive", domain=[n, nn, t], description="Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
         deltaPliq = Variable(m, "deltaPliq", type="positive", domain=[n, nn, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]")

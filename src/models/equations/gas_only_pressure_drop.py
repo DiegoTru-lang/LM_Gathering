@@ -1,18 +1,24 @@
 from gamspy import Container, Domain, Set, Parameter, Variable, Equation, Model, Sum, Sense, Options
+from gamspy.math import sqrt
 
 def gas_only_pressure_drop(m: Container) -> list[Equation]:
-    n = m["n"]
-    nn = m["nn"]
+    j = m["j"]
+    pf = m["pf"]
     d = m["d"]
     t = m["t"]
-    x_bar = m["x_bar"]
-    dist = m["dist"]
     arcs = m["arcs"]
     deltaPgas = m["deltaPgas"]
     press = m["press"]
-    cpipe_km = m["cpipe_km"]
+    pressSQ = m["pressSQ"]
+    pressGAS = m["pressGAS"]
+    q_inter = m["Qinter"]
+    kw = m["kw"]
 
-    weymouth_correlation = Equation(m, "weymouth_correlation", domain=[n,nn,t], description=" Weymouth correlation for gas-only pressure drop between nodes 'n' and 'nn' during time period 't' [MPa]")
-    weymouth_correlation[n,nn,t].where[arcs[n,nn]] =  deltaPgas[n, nn, t] == press[n,t] - Sum(d, cpipe_km[d]*Sum(Domain(n,nn).where[arcs[n, nn]], dist[n,nn]*x_bar[n,nn,d,t]))
-    
-    return [...]
+    weymouth_correlation = Equation(m, "weymouth_correlation", domain=[j,pf,d,t], description= "Weymouth correlation for gas-only pressure drop between nodes 'n' and 'nn' during time period 't' assuming diameter 'd' [MPa]")
+    # weymouth_correlation = Equation(m, "weymouth_correlation", domain=[n,nn,t], description=" Weymouth correlation for gas-only pressure drop between nodes 'n' and 'nn' during time period 't' [MPa]")
+    weymouth_correlation[j,pf,d,t].where[arcs[j,pf]] =  pressGAS[pf, t] <= sqrt(pressSQ[j,t] - q_inter[j, pf, d, t, "gas"]/kw[j,pf,d])
+
+    compute_dpGAS = Equation(m, "compute_dpGAS", domain=[j,pf,t], description= "Compute gas-only pressure drop between nodes 'j' and 'pf' during time period 't' [MPa]")
+    compute_dpGAS[j,pf,t].where[arcs[j,pf]] =  deltaPgas[j, pf, t] == press[j,t] - pressGAS[pf,t]
+
+    return [weymouth_correlation, compute_dpGAS]
