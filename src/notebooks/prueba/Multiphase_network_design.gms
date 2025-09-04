@@ -20,6 +20,7 @@ Parameter ir "Interest rate [%]" / 0.008333333333333333 /;
 Parameter dist(n,nn) "Distance between nodes'n' to 'nn' [mile]";
 Parameter hffl "Hydraulic friction factor for liquid phase" / 0.025 /;
 Parameter rho_liq "Density of liquid phase mixture" / 850.0 /;
+Parameter kw(n,nn,d) "Weymouth constants and parameters synthesized";
 Parameter maxFlow(c,t) "Maximum flow of component 'c' during time period 't' [mscf per day]";
 Parameter pmin_pf "Minimum inlet pressure at processing facility [MPa]" / 0.551581 /;
 Parameter fixPress(i,j,d,t) "Pre-computed max pressure at junction 'j' during time period 't' if connection (i, j) is installed with diameter 'd' [MPa]";
@@ -27,12 +28,14 @@ Parameter maxPress "Max pressure at node [MPa]" / 1.7236 /;
 binary Variable y_pf(pf,s,t) "Equals 1 if a processing facility of size 's' is installed at node 'pf' during time period 't'";
 binary Variable x_bar(n,nn,d,t) "Equals 1 if a pipeline segment of diameter 'd' between nodes 'n' and 'nn' is installed at time period 't'";
 positive Variable Qinter(n,nn,d,t,c) "Flow of component 'c' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [mscf per day]";
+positive Variable QGASinterSQ(n,nn,d,t) "Squared flow of 'gas' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [(mscf per day)**2]";
 positive Variable Qprocess(pf,t,c) "Amount of component 'c' processed at facility 'pf' during time period 't' [mscf per day]";
 positive Variable press(n,t) "Pressure at node 'n' during time period 't' [MPa]";
 positive Variable pressSQ(n,t) "Squared pressure at node 'n' during time period 't' [MPa]";
 positive Variable pressGAS(pf,t) "Pressure at node 'pf' during time period 't' assuming gas-only pressure drop [MPa]";
 positive Variable deltaP(n,nn,d,t) "Pressure drop 'multiphase' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]";
-positive Variable deltaPliq(n,nn,d,t) "Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]";
+positive Variable deltaPgas(n,nn,t) "Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]";
+positive Variable deltaPliq(n,nn,d,t) "Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]";
 positive Variable vel_liq(n,nn,d,t) "Liquid velocity between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [m/s]";
 positive Variable accumulated_capacity(pf,t,c) "Total accumulated capacity at processing facility 'pf' of component 'c' during time period 't' [mscf per day]";
 positive Variable pipe_cost(t) "Total cost on pipeline installation during time period 't' [kUSD]";
@@ -55,8 +58,10 @@ Equation min_press_pf_GAS(pf,t) "Impose minimum pressure at processing facility 
 Equation press_at_pf(j,pf,d,t) "Compute pressure at processing facility 'pf' during time period 't'";
 Equation compute_velLIQ(j,pf,d,t) "Compute liquid velocity assuming liquid-only on pipeline ";
 Equation compute_dpLIQ(j,pf,d,t) "Compute liquid-only pressure drop between nodes 'j' and 'pf' during time period 't' [MPa]";
+Equation weymouth_correlation(j,pf,d,t) "Weymouth correlation for gas-only pressure drop between nodes 'n' and 'nn' during time period 't' assuming diameter 'd' [MPa]";
+Equation compute_dpGAS(j,pf,t) "Compute gas-only pressure drop between nodes 'j' and 'pf' during time period 't' [MPa]";
 Equation pressure_drop_from_j_to_pf(j,pf,d,t) "Compute pressure drop from junction 'j' to processing facility 'pf' ";
-Model Multiphase_network_design / mass_balance_ij,mass_balance_jpf,mass_balance_pf,compute_pipe_cost_per_t,compute_facility_cost_per_t,compute_total_cost,facility_capacity,pipeline_capacity,unique_capacity,def_acum_cap,compute_pressure_junction,compute_square_pressure_junction,min_press_pf,min_press_pf_GAS,press_at_pf,compute_velLIQ,compute_dpLIQ,pressure_drop_from_j_to_pf /;
+Model Multiphase_network_design / mass_balance_ij,mass_balance_jpf,mass_balance_pf,compute_pipe_cost_per_t,compute_facility_cost_per_t,compute_total_cost,facility_capacity,pipeline_capacity,unique_capacity,def_acum_cap,compute_pressure_junction,compute_square_pressure_junction,min_press_pf,min_press_pf_GAS,press_at_pf,compute_velLIQ,compute_dpLIQ,weymouth_correlation,compute_dpGAS,pressure_drop_from_j_to_pf /;
 $onMultiR
 $gdxLoadAll c:\Users\Diego\Desktop\ExxonMobil\LM_Gathering\src\notebooks\prueba\Multiphase_network_design_data.gdx
 $offMulti
@@ -77,5 +82,7 @@ min_press_pf_GAS(pf,t) .. pressGAS(pf,t) =g= pmin_pf;
 press_at_pf(j,pf,d,t) $ arcs(j,pf) .. press(pf,t) =l= ((press(j,t) - deltaP(j,pf,d,t)) + (maxPress * (1 - sum(tt $ (ord(tt) <= ord(t)),x_bar(j,pf,d,tt)))));
 compute_velLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. vel_liq(j,pf,d,t) =g= ((Qinter(j,pf,d,t,"oil") + Qinter(j,pf,d,t,"water")) / ((((3.141592653589793 * power(diam(d),2)) / 4) * 24) * 3600));
 compute_dpLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. deltaPliq(j,pf,d,t) =g= (((dist(j,pf) * (hffl / 2)) * ((rho_liq * vel_liq(j,pf,d,t)) * vel_liq(j,pf,d,t))) / diam(d));
+weymouth_correlation(j,pf,d,t) $ arcs(j,pf) .. ((pressGAS(pf,t) * pressGAS(pf,t)) * 1000000.0) =l= ((pressSQ(j,t) * 1000000.0) - ((QGASinterSQ(j,pf,d,t) * 801.8422896940103) * kw(j,pf,d)));
+compute_dpGAS(j,pf,t) $ arcs(j,pf) .. deltaPgas(j,pf,t) =e= (press(j,t) - pressGAS(pf,t));
 pressure_drop_from_j_to_pf(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. deltaP(j,pf,d,t) =g= deltaPliq(j,pf,d,t);
 solve Multiphase_network_design using MIQCP MIN total_cost;

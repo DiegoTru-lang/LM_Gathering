@@ -2,7 +2,7 @@ from .data_classes import DataClass
 from .data_classes.utils.model_mappings import ModelSetMapping
 from gamspy import Container, Set, Sum, Parameter, Variable, Alias, Model, Sense, Ord, Options, Problem
 from .equations import *
-from .fluid_dynamics import compute_multiphase_pressure_drop
+from .fluid_dynamics import compute_multiphase_pressure_drop, compute_weymouth_constant
 from itertools import product
 import sys
 
@@ -87,8 +87,8 @@ class GatheringModel():
         # pressGAS = Variable(m, "pressGAS", type="positive", domain=[n, t], description="Pressure at node 'n' during time period 't' assuming gas-only pressure drop [MPa]")
         pressGAS = Variable(m, "pressGAS", type="positive", domain=[pf, t], description="Pressure at node 'pf' during time period 't' assuming gas-only pressure drop [MPa]")
         deltaP = Variable(m, "deltaP", type="positive", domain=[n, nn, d, t], description="Pressure drop 'multiphase' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]")
-        deltaPgas = Variable(m, "deltaPgas", type="positive", domain=[n, nn, d, t], description="Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]")
-        deltaPliq = Variable(m, "deltaPliq", type="positive", domain=[n, nn, d, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]")
+        deltaPgas = Variable(m, "deltaPgas", type="positive", domain=[n, nn, t], description="Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]")
+        deltaPliq = Variable(m, "deltaPliq", type="positive", domain=[n, nn, d, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
         vel_liq = Variable(m, "vel_liq", type="positive", domain=[n, nn, d, t], description="Liquid velocity between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [m/s]")
 
         accumulated_capacity = Variable(m, "accumulated_capacity", type="positive", domain=[pf, t, c], description="Total accumulated capacity at processing facility 'pf' of component 'c' during time period 't' [mscf per day]")
@@ -103,6 +103,7 @@ class GatheringModel():
         eqs += capacity_constraints(m)
         eqs += pressure_bounds(m)
         eqs += liquid_only_pressure_drop(m)
+        eqs += gas_only_pressure_drop(m)
         eqs += lm_correlation(m)
 
         model = Model(
@@ -151,6 +152,7 @@ class GatheringModel():
         self.m["maxPress"].setRecords(self.m["pwell"].records["value"].max())
         self.instance_maxFlow()
         self.compute_first_echelon_parameters()
+        self.define_weymouth_constant()
         i = self.m["i"]
         self.m["Qinter"].fx[i, self.m["nn"], self.m["d"], self.m["t"], self.m["c"]].where[Ord(self.m["t"]) < self.m["st_time"][i]] = 0
 
@@ -207,8 +209,22 @@ class GatheringModel():
         self.m["fixPress"].setRecords(fix_press_records)
 
     def define_weymouth_constant(self):
-        pass
-    
+        df_dist = self.m["dist"].records
+        df_diam = self.m["diam"].records
+        df_arcs = self.m["arcs"].records[["n","nn"]]
+        arcs_list = [(row.n, row.nn) for row in df_arcs.itertuples(index=False)]
+        second_echelon_arcs = [t for t in arcs_list if t[0].startswith("j")]
+        d_list = list(self.m["d"].records["uni"])
+
+        kw_records = []
+        for ((j,pf), d) in product(second_echelon_arcs, d_list):
+            dist = df_dist[(df_dist["n"] == j) & (df_dist["nn"] == pf)].value.sum()
+            diam = df_diam[df_diam["d"] == d].value.sum()
+            wey_const = compute_weymouth_constant(dist=dist, diam=diam)
+            kw_records.append((j, pf, d, wey_const))
+
+        self.m["kw"].setRecords(kw_records)
+
     def solve(self):
         ...
 
