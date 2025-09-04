@@ -18,6 +18,7 @@ def capacity_constraints(m: Container) -> list[Equation]:
     y_pf = m["y_pf"]
     x_bar = m["x_bar"]
     q_inter = m["Qinter"]
+    qGAS_interSQ = m["QGASinterSQ"]
     q_process = m["Qprocess"]
     accumulated_capacity = m["accumulated_capacity"]
     
@@ -26,6 +27,8 @@ def capacity_constraints(m: Container) -> list[Equation]:
     facility_capacity[pf,t,c].where[tp[t]] = q_process[pf, t, c] <= accumulated_capacity[pf,t,c]
     pipeline_capacity = Equation(m, "pipeline_capacity", domain=[n, nn, d, t, c], description="A pipeline must be installed to transport flow")
     pipeline_capacity[n,nn,d,t,c].where[arcs[n, nn] & tp[t]] = q_inter[n,nn,d,t,c] <= maxFlow[c,t]*Sum(tt.where[(Ord(tt) <= Ord(t)) & tp[tt]], x_bar[n,nn,d,tt])
+    pipelineSQ_capacity = Equation(m, "pipelineSQ_capacity", domain=[n, nn, d, t], description="A pipeline must be installed to transport squared gas flow")
+    pipelineSQ_capacity[n,nn,d,t].where[arcs[n, nn] & tp[t]] = qGAS_interSQ[n,nn,d,t] <= (maxFlow['gas',t]**2)*Sum(tt.where[(Ord(tt) <= Ord(t)) & tp[tt]], x_bar[n,nn,d,tt])
     # pipeline_capacity[n,nn,d,t,c].where[arcs[n, nn] & tp[t]] = q_inter[n,nn,d,t,c] <= maxFlow[c,t]*Sum(tt.where[Ord(tt) <= Ord(t)], x_bar[n,nn,d,tt])
     unique_pipeline = Equation(m, "unique_capacity", domain=[n], description="Just one pipeline can be installed for each connection")
     unique_pipeline[n] = Sum(Domain(nn,d,t).where[arcs[n, nn] & tp[t]], x_bar[n,nn,d,t]) <= 1

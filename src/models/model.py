@@ -1,7 +1,7 @@
 from .data_classes import DataClass
 from .data_classes.utils.model_mappings import ModelSetMapping
 from gamspy import Container, Set, Sum, Parameter, Variable, Alias, Model, Sense, Ord, Options, Problem
-from .equations import mass_balances, costs_computation, capacity_constraints
+from .equations import *
 from .fluid_dynamics import compute_multiphase_pressure_drop
 from itertools import product
 import sys
@@ -55,10 +55,8 @@ class GatheringModel():
         loc_y = Parameter(m, "loc_y", domain=n, description="Position of node 'n' in y-axis [km]")
         dist = Parameter(m, "dist", domain=[n,nn], description="Distance between nodes'n' to 'nn' [mile]")
 
-        fluid_mult = Parameter(m, "fluid_mult", domain=c, description="Multiplier to convert oil production to each component")
-        fluid_mult["oil"] = 1
-        fluid_mult["gas"] = 2
-        fluid_mult["water"] = 3.5
+        hffl = Parameter(m, "hffl", records=0.025, description="Hydraulic friction factor for liquid phase")
+        rho_liq = Parameter(m, "rho_liq", records=850, description="Density of liquid phase mixture")
         kw = Parameter(m, "kw", domain=[n,nn,d], description="Weymouth constants and parameters synthesized")
         maxFlow = Parameter(m, "maxFlow", domain=[c,t], description="Maximum flow of component 'c' during time period 't' [mscf per day]") # TODO: Compute as sum of production at all source nodes
         # pwell = Parameter(m, "pwell", domain=[i,t], description="Wellhead pressure per source node 'i' at time period 't' [MPa]")
@@ -67,7 +65,7 @@ class GatheringModel():
         pwell = Parameter(m, "pwell", domain=t, description="Wellhead pressure at every node at time period 't' [MPa]")
         pmin_pf = Parameter(m, "pmin_pf", description="Minimum inlet pressure at processing facility [MPa]")
         # fixPress = Parameter(m, "fixPress", domain=[n, nn, t], description="Pre-computed max pressure at junction 'j' during time period 't' if connection (i, j) is installed [MPa]")
-        fixPress = Parameter(m, "fixPress", domain=[i, j, t], description="Pre-computed max pressure at junction 'j' during time period 't' if connection (i, j) is installed [MPa]")
+        fixPress = Parameter(m, "fixPress", domain=[i, j, d, t], description="Pre-computed max pressure at junction 'j' during time period 't' if connection (i, j) is installed with diameter 'd' [MPa]")
         maxPress = Parameter(m, "maxPress", description="Max pressure at node [MPa]")
         
         # Variables
@@ -82,14 +80,16 @@ class GatheringModel():
         # xnr = Variable(m, "xnr", domain=[n, nn, d, t], type="binary", description="Equals 1 if a pipeline segment of diameter 'd' between nodes 'n' and 'nn' is installed at time period 't'")
         
         q_inter = Variable(m, "Qinter", type="positive", domain=[n, nn, d, t, c], description="Flow of component 'c' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [mscf per day]")
+        qGAS_interSQ = Variable(m, "QGASinterSQ", type="positive", domain=[n, nn, d, t], description="Squared flow of 'gas' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [(mscf per day)**2]")
         q_process = Variable(m, "Qprocess", type="positive", domain=[pf, t, c], description="Amount of component 'c' processed at facility 'pf' during time period 't' [mscf per day]")
         press = Variable(m, "press", type="positive", domain=[n, t], description="Pressure at node 'n' during time period 't' [MPa]")
         pressSQ = Variable(m, "pressSQ", type="positive", domain=[n, t], description="Squared pressure at node 'n' during time period 't' [MPa]")
         # pressGAS = Variable(m, "pressGAS", type="positive", domain=[n, t], description="Pressure at node 'n' during time period 't' assuming gas-only pressure drop [MPa]")
         pressGAS = Variable(m, "pressGAS", type="positive", domain=[pf, t], description="Pressure at node 'pf' during time period 't' assuming gas-only pressure drop [MPa]")
-        deltaP = Variable(m, "deltaP", type="positive", domain=[n, nn, t], description="Pressure drop 'multiphase' between nodes 'n' and 'nn' during time period 't' [MPa]")
-        deltaPgas = Variable(m, "deltaPgas", type="positive", domain=[n, nn, t], description="Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
-        deltaPliq = Variable(m, "deltaPliq", type="positive", domain=[n, nn, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
+        deltaP = Variable(m, "deltaP", type="positive", domain=[n, nn, d, t], description="Pressure drop 'multiphase' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]")
+        deltaPgas = Variable(m, "deltaPgas", type="positive", domain=[n, nn, d, t], description="Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]")
+        deltaPliq = Variable(m, "deltaPliq", type="positive", domain=[n, nn, d, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]")
+        vel_liq = Variable(m, "vel_liq", type="positive", domain=[n, nn, d, t], description="Liquid velocity between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [m/s]")
 
         accumulated_capacity = Variable(m, "accumulated_capacity", type="positive", domain=[pf, t, c], description="Total accumulated capacity at processing facility 'pf' of component 'c' during time period 't' [mscf per day]")
         pipe_cost = Variable(m, "pipe_cost", type="positive", domain=t, description="Total cost on pipeline installation during time period 't' [kUSD]")
@@ -101,6 +101,9 @@ class GatheringModel():
         eqs += mass_balances(m)
         eqs += costs_computation(m)
         eqs += capacity_constraints(m)
+        eqs += pressure_bounds(m)
+        eqs += liquid_only_pressure_drop(m)
+        eqs += lm_correlation(m)
 
         model = Model(
             m,
@@ -108,7 +111,7 @@ class GatheringModel():
             equations=eqs,
             # equations=m.getEquations(),
             sense=Sense.MIN,
-            problem=Problem.MIP,
+            problem=Problem.MIQCP,
             objective=total_cost,
             # options=Options(mip="gurobi"),
         )
@@ -145,6 +148,7 @@ class GatheringModel():
         self.m["arcs"].setRecords(arcs)
         self.m["tp"].setRecords([f"t{int(i)}" for i in list(self.m["st_time"].records["value"].unique())])
         self.m["dp_max"].setRecords(self.m["pwell"].records["value"].max() - self.m["pmin_pf"].records["value"].min())  # Set default max pressure drop
+        self.m["maxPress"].setRecords(self.m["pwell"].records["value"].max())
         self.instance_maxFlow()
         self.compute_first_echelon_parameters()
         i = self.m["i"]
@@ -166,6 +170,7 @@ class GatheringModel():
         # TODO: Profile and improve algorithm
         mpa_to_psi = 145.038
         dp_records = []
+        fix_press_records = []
 
         df_st_time = self.m["st_time"].records
         df_Qprod = self.m["Qprod"].records
@@ -184,18 +189,26 @@ class GatheringModel():
             t_adjusted = int(t[1:]) + 1 - st
             if dist > 0 and t_adjusted >= 1:
                 Q_aux = df_Qprod[df_Qprod["t"] == f"t{t_adjusted}"]
-                Qoil = Q_aux[Q_aux["c"] == "Oil"].value.sum()
-                Qgas = Q_aux[Q_aux["c"] == "Gas"].value.sum()
-                Qwater = Q_aux[Q_aux["c"] == "Water"].value.sum()
+                Qoil = Q_aux[Q_aux["c"] == "oil"].value.sum()
+                Qgas = Q_aux[Q_aux["c"] == "gas"].value.sum()
+                Qwater = Q_aux[Q_aux["c"] == "water"].value.sum()
                 p_inlet = df_pwell[df_pwell["t"] == f"t{t_adjusted}"].value.sum()
                 diam = df_diam[df_diam["d"] == d].value.sum()
                 dp, _, _ = compute_multiphase_pressure_drop(Qoil=Qoil, Qgas=Qgas, Qwater=Qwater, p_inlet=p_inlet*mpa_to_psi, dist=dist, diam=diam)
+                fix_press = p_inlet - dp
             else:
                 dp = 0
+                fix_press = self.m["maxPress"].records["value"].max()
+            fix_press = max(fix_press, 0)  # Ensure non-negative
+            fix_press_records.append((i,j,d,t,fix_press))
             dp_records.append((i,j,d,t,dp))
 
         self.m["dp_firstEch"].setRecords(dp_records)
+        self.m["fixPress"].setRecords(fix_press_records)
 
+    def define_weymouth_constant(self):
+        pass
+    
     def solve(self):
         ...
 

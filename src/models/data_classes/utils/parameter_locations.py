@@ -45,9 +45,9 @@ def read_parameter_from_excel(excel_path: str, location: Tuple[str, int, int, in
                                     var_name="Component",
                                     value_name="Value")
             df_melted["Component"] = df_melted["Component"].map({
-                                    "Oil production [BBL/day]": "Oil",
-                                    "Gas production [mscf/day]": "Gas",
-                                    "Water production [BBL/day]": "Water"})
+                                    "Oil production [BBL/day]": "oil",
+                                    "Gas production [mscf/day]": "gas",
+                                    "Water production [BBL/day]": "water"})
             df_melted = df_melted[["Component", "Time period", "Value"]]
         else:
             df_melted = data.melt(id_vars=[pivot_table], var_name="j", value_name="value")
