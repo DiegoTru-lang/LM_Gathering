@@ -11,7 +11,6 @@ def gas_only_pressure_drop(m: Container) -> list[Equation]:
     press = m["press"]
     pressSQ = m["pressSQ"]
     pressGAS = m["pressGAS"]
-    q_inter = m["Qinter"]
     qGAS_interSQ = m["QGASinterSQ"]
     kw = m["kw"]
 

@@ -14,7 +14,6 @@ def pressure_bounds(m: Container) -> list[Equation]:
     pressGAS = m["pressGAS"]
     pressSQ = m["pressSQ"]
     deltaP = m["deltaP"]
-    deltaPgas = m["deltaPgas"]
     fixPress = m["fixPress"]
     maxPress = m["maxPress"]
     pmin_pf = m["pmin_pf"]
@@ -31,8 +30,8 @@ def pressure_bounds(m: Container) -> list[Equation]:
     minimum_pressure_pf_GAS = Equation(m, "min_press_pf_GAS", domain=[pf,t], description= "Impose minimum pressure at processing facility 'pf' during time period 't'")
     minimum_pressure_pf_GAS[pf,t] =  pressGAS[pf,t] >= pmin_pf
 
-    pressure_at_pf = Equation(m, "press_at_pf", domain=[j,pf,d,t], description= "Compute pressure at processing facility 'pf' during time period 't'")
-    pressure_at_pf[j,pf,d,t].where[arcs[j,pf]] =  press[pf,t] <= press[j,t] - deltaP[j,pf,d,t] + maxPress*(1 - Sum(tt.where[Ord(tt) <= Ord(t)], x_bar[j,pf,d,tt]))
+    pressure_at_pf = Equation(m, "press_at_pf", domain=[j,pf,t], description= "Compute pressure at processing facility 'pf' during time period 't'")
+    pressure_at_pf[j,pf,t].where[arcs[j,pf]] =  press[pf,t] <= press[j,t] - deltaP[j,pf,t] + maxPress*(1 - Sum(Domain(d, tt).where[Ord(tt) <= Ord(t)], x_bar[j,pf,d,tt]))
 
     return [compute_pressure_junction, compute_square_pressure_junction, minimum_pressure_pf, minimum_pressure_pf_GAS, pressure_at_pf]
     # return [minimum_pressure_pf, minimum_pressure_pf_GAS]
