@@ -23,7 +23,7 @@ def mass_balances(m: Container) -> list[Equation]:
     mass_balance_pf = Equation(m, "mass_balance_pf", domain=[pf,c,t], description="Mass balance for processing facility")
     # mass_balance[i, c, t] =  q_prod[i, t, c] + Sum(Domain(nn, d).where[arcs[nn, i]], q_inter[nn, i, d, t, c]) == Sum(Domain(nn, d).where[arcs[i, nn]], q_inter[i, nn, d, t, c])
     # mass_balance[i, c, t] =  q_prod[i, t, c] == Sum(Domain(nn, d).where[arcs[i, nn]], q_inter[i, nn, d, t, c])
-    mass_balance_ij[i, c, t].where[Ord(t) >= (st_time[i])] =  Sum(tt.where[Ord(tt) == (Ord(t) + 1 - st_time[i])], q_prod[tt])*fluid_mult[c] == Sum(Domain(nn, d).where[arcs[i, nn]], q_inter[i, nn, d, t, c])
+    mass_balance_ij[i, c, t].where[Ord(t) >= (st_time[i])] =  Sum(tt.where[Ord(tt) == (Ord(t) + 1 - st_time[i])], q_prod[c, tt]) == Sum(Domain(nn, d).where[arcs[i, nn]], q_inter[i, nn, d, t, c])
     mass_balance_jpf[j, c, t] =  Sum(Domain(nn, d).where[arcs[nn, j]], q_inter[nn, j, d, t, c]) == Sum(Domain(nn, d).where[arcs[j, nn]], q_inter[j, nn, d, t, c])
     # mass_balance[pf, c, t] = Sum(Domain(nn, d).where[arcs[nn, pf]], q_inter[nn, pf, d, t, c]) == Sum(Domain(nn, d).where[arcs[pf, nn]], q_inter[pf, nn, d, t, c]) + q_process[pf, t, c]
     mass_balance_pf[pf, c, t] = Sum(Domain(nn, d).where[arcs[nn, pf]], q_inter[nn, pf, d, t, c]) == q_process[pf, t, c]

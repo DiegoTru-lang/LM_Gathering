@@ -2,6 +2,8 @@ from .data_classes import DataClass
 from .data_classes.utils.model_mappings import ModelSetMapping
 from gamspy import Container, Set, Sum, Parameter, Variable, Alias, Model, Sense, Ord, Options, Problem
 from .equations import mass_balances, costs_computation, capacity_constraints
+from .fluid_dynamics import compute_multiphase_pressure_drop
+from itertools import product
 import sys
 
 class GatheringModel():
@@ -34,7 +36,7 @@ class GatheringModel():
 
         # Parameters
 
-        q_prod = Parameter(m, "Qprod", domain=t, description="Oil production at each node at 't' periods after start-time [BBL per day]")
+        q_prod = Parameter(m, "Qprod", domain=[c,t], description="Oil production at each node at 't' periods after start-time [BBL per day]")
         # q_prod = Parameter(m, "Qprod", domain=[i,t,c], description="Production at source node 'i' of component 'c' during time period 't' [mscf per day]")
         st_time = Parameter(m, "st_time", domain=i, description="Production start time of source node 'i' ") #TODO: Compute based on q_prod
         capacity = Parameter(m, "capacity", domain=[s, c], description="Capacity for facility size 's' and component 'c' [mscf per day]")
@@ -60,6 +62,8 @@ class GatheringModel():
         kw = Parameter(m, "kw", domain=[n,nn,d], description="Weymouth constants and parameters synthesized")
         maxFlow = Parameter(m, "maxFlow", domain=[c,t], description="Maximum flow of component 'c' during time period 't' [mscf per day]") # TODO: Compute as sum of production at all source nodes
         # pwell = Parameter(m, "pwell", domain=[i,t], description="Wellhead pressure per source node 'i' at time period 't' [MPa]")
+        dp_firstEch = Parameter(m, "dp_firstEch", domain=[i,j,d,t], description="Pre-computed pressure drop at first echelon for connection (i,j), diameter 'd' at time period 't' [MPa]")
+        dp_max = Parameter(m, "dp_max", description="Maximum allowable pressure drop between two nodes [MPa]")
         pwell = Parameter(m, "pwell", domain=t, description="Wellhead pressure at every node at time period 't' [MPa]")
         pmin_pf = Parameter(m, "pmin_pf", description="Minimum inlet pressure at processing facility [MPa]")
         # fixPress = Parameter(m, "fixPress", domain=[n, nn, t], description="Pre-computed max pressure at junction 'j' during time period 't' if connection (i, j) is installed [MPa]")
@@ -140,7 +144,9 @@ class GatheringModel():
 
         self.m["arcs"].setRecords(arcs)
         self.m["tp"].setRecords([f"t{int(i)}" for i in list(self.m["st_time"].records["value"].unique())])
+        self.m["dp_max"].setRecords(self.m["pwell"].records["value"].max() - self.m["pmin_pf"].records["value"].min())  # Set default max pressure drop
         self.instance_maxFlow()
+        self.compute_first_echelon_parameters()
         i = self.m["i"]
         self.m["Qinter"].fx[i, self.m["nn"], self.m["d"], self.m["t"], self.m["c"]].where[Ord(self.m["t"]) < self.m["st_time"][i]] = 0
 
@@ -151,14 +157,44 @@ class GatheringModel():
         """
         maxFlow = self.m["maxFlow"]
         q_prod = self.m["Qprod"]
-        fluid_mult = self.m["fluid_mult"]
         i = self.m["i"]
         c = self.m["c"]
         t = self.m["t"]
-        maxFlow[c,t] = Sum(i, q_prod[t])*fluid_mult[c]
+        maxFlow[c,t] = Sum(i, q_prod[c, t])
 
     def compute_first_echelon_parameters(self):
-        ...
+        # TODO: Profile and improve algorithm
+        mpa_to_psi = 145.038
+        dp_records = []
+
+        df_st_time = self.m["st_time"].records
+        df_Qprod = self.m["Qprod"].records
+        df_pwell = self.m["pwell"].records
+        df_dist = self.m["dist"].records
+        df_diam = self.m["diam"].records
+
+        d_list = list(self.m["d"].records["uni"])
+        t_list = list(self.m["tp"].records["t"])
+        df_arcs = self.m["arcs"].records[["n","nn"]]
+        arcs_list = [(row.n, row.nn) for row in df_arcs.itertuples(index=False)]
+        first_echelon_arcs = [t for t in arcs_list if t[0].startswith("i")]
+        for ((i,j), d, t) in product(first_echelon_arcs, d_list, t_list):
+            dist = df_dist[(df_dist["n"] == i) & (df_dist["nn"] == j)].value.sum()
+            st = int(df_st_time[df_st_time["i"] == i].value.iloc[0])
+            t_adjusted = int(t[1:]) + 1 - st
+            if dist > 0 and t_adjusted >= 1:
+                Q_aux = df_Qprod[df_Qprod["t"] == f"t{t_adjusted}"]
+                Qoil = Q_aux[Q_aux["c"] == "Oil"].value.sum()
+                Qgas = Q_aux[Q_aux["c"] == "Gas"].value.sum()
+                Qwater = Q_aux[Q_aux["c"] == "Water"].value.sum()
+                p_inlet = df_pwell[df_pwell["t"] == f"t{t_adjusted}"].value.sum()
+                diam = df_diam[df_diam["d"] == d].value.sum()
+                dp, _, _ = compute_multiphase_pressure_drop(Qoil=Qoil, Qgas=Qgas, Qwater=Qwater, p_inlet=p_inlet*mpa_to_psi, dist=dist, diam=diam)
+            else:
+                dp = 0
+            dp_records.append((i,j,d,t,dp))
+
+        self.m["dp_firstEch"].setRecords(dp_records)
 
     def solve(self):
         ...

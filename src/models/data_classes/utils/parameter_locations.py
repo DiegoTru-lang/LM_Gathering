@@ -16,8 +16,8 @@ class ParameterLocation(Enum):
     LOC_Y = (("Location", 1, 50, 3, 4), False)
     DIST_IJ = (("Distances", 0, 12, 0, 12), "dist_ij")
     DIST_JK = (("Distances", 0, 12, 15, 18), "dist_jk")
-    PROD = (("Production", 1, 200, 0, 1), False)
-    START_TIME = (("Production", 1, 20, 6, 7), False)
+    PROD = (("Production", 0, 200, 0, 3), "Qprod")
+    START_TIME = (("Production", 1, 50, 8, 9), False)
     FAC_CAP = (("Capacity", 1, 20, 0, 2), False)
     DIAM_SIZES = (("Capacity", 1, 20, 7, 8), False)
     FAC_COST = (("Capital expenditure", 1, 20, 0, 1), False)
@@ -39,9 +39,20 @@ def read_parameter_from_excel(excel_path: str, location: Tuple[str, int, int, in
     if pivot_table:
         df = pd.read_excel(excel_path, sheet_name=sheet_name)
         data = df.iloc[start_row:end_row+1, start_col:end_col+1]
-        df_melted = data.melt(id_vars=[pivot_table], var_name="j", value_name="value")
-        df_melted["value"] = df_melted["value"].fillna(0)
-        df_melted = df_melted.dropna(subset=[pivot_table, "j"])
+        if pivot_table == "Qprod":
+            df_melted = data.melt(id_vars=["Time period"], 
+                                    value_vars=["Oil production [BBL/day]", "Gas production [mscf/day]", "Water production [BBL/day]"],
+                                    var_name="Component",
+                                    value_name="Value")
+            df_melted["Component"] = df_melted["Component"].map({
+                                    "Oil production [BBL/day]": "Oil",
+                                    "Gas production [mscf/day]": "Gas",
+                                    "Water production [BBL/day]": "Water"})
+            df_melted = df_melted[["Component", "Time period", "Value"]]
+        else:
+            df_melted = data.melt(id_vars=[pivot_table], var_name="j", value_name="value")
+            df_melted["value"] = df_melted["value"].fillna(0)
+            df_melted = df_melted.dropna(subset=[pivot_table, "j"])
         return list(df_melted.itertuples(index=False, name=None))
     df = pd.read_excel(excel_path, sheet_name=sheet_name, header=None)
     data = df.iloc[start_row:end_row+1, start_col:end_col+1]
