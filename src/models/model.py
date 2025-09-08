@@ -240,8 +240,34 @@ class GatheringModel():
 
         self.m["kw"].setRecords(kw_records)
 
-    def solve(self):
-        ...
+    def solve(self, solver: str = "gurobi", gap: float = 0.0001, max_time: float = 300.0):
+        model = self.m["Multiphase_network_design"]
+        model.solve(solver=solver, options=Options(relative_optimality_gap=gap, time_limit = max_time))
+        # TODO: Validar si los cambios (valores en variables) se reflejan en self.m
+
+    def obtain_var_df(self, var_name: str):
+        var_df = self.m[var_name].records
+        # var_df = var_df[var_df["level"] > 0]
+        idx = var_df.columns.get_loc("level")
+        return var_df.iloc[:, :idx+1]
+    
+    def obtain_record_value(self, var_name: str, record: tuple):
+        var_df = self.obtain_var_df(var_name)
+        idx = len(var_df) - 1
+        
+        key_cols = var_df.columns[:idx]
+
+        if len(record) != len(key_cols):
+            raise ValueError(
+                f"Record length ({len(record)}) does not match number of key columns ({len(key_cols)})."
+            )
+
+        mask = (var_df[key_cols] == record).all(axis=1)
+        row = var_df.loc[mask, "level"]
+
+        if row.empty:
+            return None
+        return row.iloc[0]
 
     def predict(self, input_data):
         print(f"Predicting with {self.model_name} for input: {input_data}")
