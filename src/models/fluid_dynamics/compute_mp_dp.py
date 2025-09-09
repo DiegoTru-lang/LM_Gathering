@@ -41,9 +41,9 @@ def compute_multiphase_pressure_drop(Qoil,
     dist = dist * mile_to_m
 
     dp_gas = compute_gas_pressure_drop(Qgas, p_inlet, dist, diam, density_GP, Tavg, T0, P0, pipe_efficiency) # dp_gas [MPa/m]
-    dp_liq = compute_liquid_pressure_drop(Qoil, Qwater, diam, density_LP, viscosity_LP, pipe_roughness)  # dp_liq [MPa]
+    dp_liq = compute_liquid_pressure_drop(Qoil, Qwater, diam, density_LP, viscosity_LP, pipe_roughness)  # dp_liq [MPa/m]
     ixlm = dp_gas/dp_liq
     ylp = ((ixlm**(1/n))+1)**n
     dp_mp = dp_liq*ylp
     dp_mp = dp_mp*dist
-    return (dp_mp, ixlm, ylp)
+    return (dp_mp, ixlm, ylp, dp_gas*dist, dp_liq*dist)

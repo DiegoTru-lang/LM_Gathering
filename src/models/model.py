@@ -25,7 +25,7 @@ class GatheringModel():
         j = Set(m, "j", domain=n, description="Junction nodes / multi-phase")
         pf = Set(m, "pf", domain=n, description="Processing facilities")
 
-        arcs = Set(m, "arcs", domain=[n,nn], description="Allowed connections") 
+        arcs = Set(m, "arcs", domain=[n,nn], description="Allowed connections")
         
         t = Set(m, "t", description="Time periods")
         tt = Alias(m, name="tt", alias_with=t)
@@ -34,6 +34,7 @@ class GatheringModel():
         d = Set(m, "d", description="Pipeline diameter options")
         s = Set(m, "s", description="Facility sizes")
         
+        selected_pipes = Set(m, "sel_pipes", domain=[n,nn,d], description="Pipeline connections that were selected in previous iterations of the algorithm")
         pw = Set(m, "pw", description="Segments for LM correalation piecewise linearization")
 
         # Parameters
@@ -70,8 +71,9 @@ class GatheringModel():
         fixPress = Parameter(m, "fixPress", domain=[i, j, d, t], description="Pre-computed max pressure at junction 'j' during time period 't' if connection (i, j) is installed with diameter 'd' [MPa]")
         maxPress = Parameter(m, "maxPress", description="Max pressure at node [MPa]")
 
-        ixlm_ub = Parameter(m, "ixlm_ub", domain=pw, description="IXLM upper bound for LM interval 'pw' ")
-        ylp = Parameter(m, "ylp", domain=pw, description="YLM multiplier for liquid phase for LM interval 'pw' ")
+        ixlm_ub = Parameter(m, "ixlm_ub", domain=[pw, j, pf, d], description="IXLM upper bound for LM interval 'pw' for connection (j,pf,d)")
+        ylp = Parameter(m, "ylp", domain=[pw, j, pf, d], description="YLM multiplier for liquid phase for LM interval 'pw' for connection (j,pf,d) ")
+        allowed_int = Parameter(m, "allowed_int", domain=[j,pf,d], description="Order of maximum allowed interval 'pw' ") #i.e., if 3, then pw = 1,2,3 allowed; if 1, then only pw = 1 allowed
 
         # Variables
 
@@ -79,7 +81,7 @@ class GatheringModel():
         y_pf = Variable(m, "y_pf", domain=[pf, s, t], type="binary", 
                         description="Equals 1 if a processing facility of size 's' is installed at node 'pf' during time period 't'")
         x_bar = Variable(m, "x_bar", domain=[n, nn, d, t], type="binary", description="Equals 1 if a pipeline segment of diameter 'd' between nodes 'n' and 'nn' is installed at time period 't'")
-        x_pw = Variable(m, "x_pw", domain=[j, pf, t, pw], type="binary", description="Equals 1 if connection 'j' to 'pf' lies between ixlm interval of piecewise linearization 'pw' ")
+        x_pw = Variable(m, "x_pw", domain=[j, pf, d, t, pw], type="binary", description="Equals 1 if connection 'j' to 'pf' with diameter 'd' lies between ixlm interval of piecewise linearization 'pw' ")
         # xf = Variable(m, "xf", domain=[n, nn, d, t], type="binary", description="Equals 1 if a pipeline segment of diameter 'd' transports fluid from node 'n' to 'nn' at time period 't'")
         # xr = Variable(m, "xr", domain=[n, nn, d, t], type="binary", description="Equals 1 if a pipeline segment of diameter 'd' transports fluid from node 'nn' to 'n' at time period 't'")
         # xnf = Variable(m, "xnf", domain=[n, nn, d, t], type="binary", description="Equals 1 if no pipeline segment of diameter 'd' is installed between 'n' and 'nn' and P(n) <= P(nn) at time period 't'")
@@ -95,7 +97,7 @@ class GatheringModel():
         deltaP = Variable(m, "deltaP", type="positive", domain=[n, nn, t], description="Pressure drop 'multiphase' between nodes 'n' and 'nn' during time period 't' [MPa]")
         deltaPgas = Variable(m, "deltaPgas", type="positive", domain=[n, nn, t], description="Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]")
         deltaPliq = Variable(m, "deltaPliq", type="positive", domain=[n, nn, d, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
-        deltaPliqYLM = Variable(m, "deltaPliqYLM", type="positive", domain=[n, nn, t, pw], description="Intermediate variable equal to pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
+        deltaPliqYLM = Variable(m, "deltaPliqYLM", type="positive", domain=[n, nn, d, t, pw], description="Intermediate variable equal to pressure drop 'liquid-only' between nodes 'n' and 'nn' with diameter 'd' during time period 't' [MPa]")
         vel_liq = Variable(m, "vel_liq", type="positive", domain=[n, nn, d, t], description="Liquid velocity between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [m/s]")
 
         accumulated_capacity = Variable(m, "accumulated_capacity", type="positive", domain=[pf, t, c], description="Total accumulated capacity at processing facility 'pf' of component 'c' during time period 't' [mscf per day]")
@@ -164,13 +166,22 @@ class GatheringModel():
         self.m["Qinter"].fx[i, self.m["nn"], self.m["d"], self.m["t"], self.m["c"]].where[Ord(self.m["t"]) < self.m["st_time"][i]] = 0
         
         ## Initialize piecewise linearization
+        j = self.m["j"]
+        pf = self.m["pf"]
+        d = self.m["d"]
         pw = self.m["pw"]
         ixlm_ub = self.m["ixlm_ub"]
         ylp = self.m["ylp"]
-        pw.setRecords(["pw1"])
-        ixlm_ub.setRecords([("pw1", 1)])
-        ylp.setRecords([("pw1", 1)])
+        allowed_int = self.m["allowed_int"]
 
+        pw.setRecords(["pw1", "pw2", "pw3", "pw4", "pw5"])
+        # ixlm_ub.setRecords([("pw1", 1)])
+        # ylp.setRecords([("pw1", 1)])
+        ixlm_ub["pw1", j, pf, d] = 1
+        ylp["pw1", j, pf, d] = 1
+        ixlm_ub[pw, j, pf, d].where[Ord(pw) > 1] = 5
+        ylp[pw, j, pf, d].where[Ord(pw) > 1] = 5
+        allowed_int[j, pf, d] = 1
 
     def instance_maxFlow(self):
         """
@@ -211,7 +222,7 @@ class GatheringModel():
                 Qwater = Q_aux[Q_aux["c"] == "water"].value.sum()
                 p_inlet = df_pwell[df_pwell["t"] == f"t{t_adjusted}"].value.sum()
                 diam = df_diam[df_diam["d"] == d].value.sum()
-                dp, _, _ = compute_multiphase_pressure_drop(Qoil=Qoil, Qgas=Qgas, Qwater=Qwater, p_inlet=p_inlet*mpa_to_psi, dist=dist, diam=diam)
+                dp, _, _, _, _ = compute_multiphase_pressure_drop(Qoil=Qoil, Qgas=Qgas, Qwater=Qwater, p_inlet=p_inlet*mpa_to_psi, dist=dist, diam=diam)
                 fix_press = p_inlet - dp
             else:
                 dp = 0
@@ -241,9 +252,15 @@ class GatheringModel():
         self.m["kw"].setRecords(kw_records)
 
     def solve(self, solver: str = "gurobi", gap: float = 0.0001, max_time: float = 300.0):
-        model = self.m["Multiphase_network_design"]
-        model.solve(solver=solver, options=Options(relative_optimality_gap=gap, time_limit = max_time))
+        model = self.m.models["Multiphase_network_design"]
+        summary = model.solve(solver=solver, options=Options(relative_optimality_gap=gap, time_limit = max_time))
+        return summary
         # TODO: Validar si los cambios (valores en variables) se reflejan en self.m
+
+    def export_gdx(self, name: str = "Multiphase_Network_Design"):
+        model = self.m.models["Multiphase_network_design"]
+        model.toGams(path=name)
+
 
     def obtain_var_df(self, var_name: str):
         var_df = self.m[var_name].records
@@ -268,6 +285,22 @@ class GatheringModel():
         if row.empty:
             return None
         return row.iloc[0]
+
+    def update_selected_pipes(self):
+        selected_pipes = self.m["sel_pipes"]
+        j = self.m["j"]
+
+        pipes = self.obtain_var_df("x_bar")
+        pipes = pipes[pipes["level"] > 0.5]
+
+        for _, row in pipes.iterrows():
+            if row["n"] not in j.records["n"].values:
+                continue
+            else:
+                selected_pipes[row["n"], row["nn"], row["d"]] = True
+
+    def solution_algorithm(self):
+        pass
 
     def predict(self, input_data):
         print(f"Predicting with {self.model_name} for input: {input_data}")
