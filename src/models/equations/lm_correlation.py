@@ -25,7 +25,7 @@ def lm_correlation(m: Container) -> list[Equation]:
     # one_interval[j,pf,d,t].where[selected_pipes[j,pf,d] & tp[t]] =  Sum(pw.where[Ord(pw) <= allowed_int[j,pf,d]], x_pw[j,pf,d,t,pw]) == 1
     
     ixlm_interval = Equation(m, "ixlm_interval", domain=[j,pf,d,t,pw], description= "Impose interval for LM correlation between junction 'j' and processing facility 'pf' during time period 't' ")
-    ixlm_interval[j,pf,d,t,pw].where[selected_pipes[j,pf,d] & tp[t] & (Ord(pw) <= allowed_int[j,pf,d])] =  deltaPgas[j,pf,t] <= ixlm_ub[pw,j,pf,d]*deltaPliq[j,pf,d,t] + dp_max*(1 - x_pw[j,pf,d,t,pw])
+    ixlm_interval[j,pf,d,t,pw].where[selected_pipes[j,pf,d] & tp[t] & (Ord(pw) <= allowed_int[j,pf,d])] =  deltaPgas[j,pf,t] <= (ixlm_ub[pw,j,pf,d,t] - 1e3)*deltaPliq[j,pf,d,t] + dp_max*(1 - x_pw[j,pf,d,t,pw])
     # ixlm_interval[j,pf,d,t,pw].where[selected_pipes[j,pf,d] & tp[t] & (Ord(pw) <= allowed_int[j,pf,d])] =  deltaPgas[j,pf,t] <= ixlm_ub[pw,j,pf,d]*Sum(d, deltaPliq[j,pf,d,t]) + dp_max*(1 - x_pw[j,pf,t,pw])
 
     compute_deltaPliqYLM = Equation(m, "compute_deltaPliqYLM", domain=[j,pf,d,t], description="Intermediate variable definition")
@@ -36,6 +36,6 @@ def lm_correlation(m: Container) -> list[Equation]:
     deltaPliqYLM_bound[j,pf,d,t,pw].where[selected_pipes[j,pf,d] & tp[t] & (Ord(pw) <= allowed_int[j,pf,d])] = deltaPliqYLM[j,pf,d,t,pw] <= dp_max*x_pw[j,pf,d,t,pw]
 
     pressure_drop_from_j_to_pf = Equation(m, "pressure_drop_from_j_to_pf", domain=[j,pf,d,t], description= "Compute pressure drop from junction 'j' to processing facility 'pf' ")
-    pressure_drop_from_j_to_pf[j,pf,d,t].where[selected_pipes[j,pf,d] & tp[t]] =  deltaP[j,pf,t] >= Sum(pw.where[Ord(pw) <= allowed_int[j,pf,d]], ylp[pw,j,pf,d]*deltaPliqYLM[j,pf,d,t,pw])
+    pressure_drop_from_j_to_pf[j,pf,d,t].where[selected_pipes[j,pf,d] & tp[t]] =  deltaP[j,pf,t] >= Sum(pw.where[Ord(pw) <= allowed_int[j,pf,d]], ylp[pw,j,pf,d,t]*deltaPliqYLM[j,pf,d,t,pw])
 
     return [one_interval, ixlm_interval, compute_deltaPliqYLM, deltaPliqYLM_bound, pressure_drop_from_j_to_pf]

@@ -28,8 +28,8 @@ Parameter dp_max "Maximum allowable pressure drop between two nodes [MPa]" / 1.1
 Parameter pmin_pf "Minimum inlet pressure at processing facility [MPa]" / 0.551581 /;
 Parameter fixPress(i,j,d,t) "Pre-computed max pressure at junction 'j' during time period 't' if connection (i, j) is installed with diameter 'd' [MPa]";
 Parameter maxPress "Max pressure at node [MPa]" / 1.7236 /;
-Parameter ixlm_ub(pw,j,pf,d) "IXLM upper bound for LM interval 'pw' for connection (j,pf,d)";
-Parameter ylp(pw,j,pf,d) "YLM multiplier for liquid phase for LM interval 'pw' for connection (j,pf,d) ";
+Parameter ixlm_ub(pw,j,pf,d,t) "IXLM upper bound for LM interval 'pw' for connection (j,pf,d) at time 't'";
+Parameter ylp(pw,j,pf,d,t) "YLM multiplier for liquid phase for LM interval 'pw' for connection (j,pf,d) at time 't'";
 Parameter allowed_int(j,pf,d) "Order of maximum allowed interval 'pw' ";
 binary Variable y_pf(pf,s,t) "Equals 1 if a processing facility of size 's' is installed at node 'pf' during time period 't'";
 binary Variable x_bar(n,nn,d,t) "Equals 1 if a pipeline segment of diameter 'd' between nodes 'n' and 'nn' is installed at time period 't'";
@@ -75,30 +75,30 @@ Equation deltaPliqYLM_bound(j,pf,d,t,pw) "Fix to 0 intermediate variable if IXLM
 Equation pressure_drop_from_j_to_pf(j,pf,d,t) "Compute pressure drop from junction 'j' to processing facility 'pf' ";
 Model Multiphase_network_design / mass_balance_ij,mass_balance_jpf,mass_balance_pf,compute_pipe_cost_per_t,compute_facility_cost_per_t,compute_total_cost,facility_capacity,pipeline_capacity,unique_capacity,def_acum_cap,compute_pressure_junction,compute_square_pressure_junction,min_press_pf,min_press_pf_GAS,press_at_pf,compute_velLIQ,compute_dpLIQ,weymouth_correlation,compute_dpGAS,one_interval,ixlm_interval,compute_deltaPliqYLM,deltaPliqYLM_bound,pressure_drop_from_j_to_pf /;
 $onMultiR
-$gdxLoadAll c:\Users\Diego\Desktop\ExxonMobil\LM_Gathering\src\notebooks\model.gdx\Multiphase_network_design_data.gdx
+$gdxLoadAll c:\Users\Diego\Desktop\ExxonMobil\LM_Gathering\src\notebooks\toy_problem\iteration_2\Multiphase_network_design_data.gdx
 $offMulti
-mass_balance_ij(i,c,t) $ (ord(t) >= st_time(i)) .. sum(tt $ (ord(tt) eq ((ord(t) + 1) - st_time(i))),Qprod(c,tt)) =e= sum((nn,d) $ arcs(i,nn),Qinter(i,nn,d,t,c));
-mass_balance_jpf(j,c,t) .. sum((nn,d) $ arcs(nn,j),Qinter(nn,j,d,t,c)) =e= sum((nn,d) $ arcs(j,nn),Qinter(j,nn,d,t,c));
-mass_balance_pf(pf,c,t) .. sum((nn,d) $ arcs(nn,pf),Qinter(nn,pf,d,t,c)) =e= Qprocess(pf,t,c);
-compute_pipe_cost_per_t(t) .. pipe_cost(t) =e= sum(d,(diameter_cost(d) * sum((n,nn) $ arcs(n,nn),(dist(n,nn) * x_bar(n,nn,d,t)))));
-compute_facility_cost_per_t(t) .. facility_cost(t) =e= (1000 * sum((pf,s),(facility_cost_size(s) * y_pf(pf,s,t))));
-compute_total_cost .. total_cost =e= (sum(t,(rPower((1 + ir),( - (ord(t) - 1))) * (pipe_cost(t) + facility_cost(t)))) / 1000);
-facility_capacity(pf,t,c) $ tp(t) .. Qprocess(pf,t,c) =l= accumulated_capacity(pf,t,c);
-pipeline_capacity(n,nn,d,t,c) $ (arcs(n,nn) and tp(t)) .. Qinter(n,nn,d,t,c) =l= (maxFlow(c,t) * sum(tt $ ((ord(tt) <= ord(t)) and tp(tt)),x_bar(n,nn,d,tt)));
+mass_balance_ij(i,c,t) $ (ord(t) >= st_time(i)) .. sum(tt $ (ord(tt) eq ord(t) + 1 - st_time(i)),Qprod(c,tt)) =e= sum((nn,d) $ (arcs(i,nn)),Qinter(i,nn,d,t,c));
+mass_balance_jpf(j,c,t) .. sum((nn,d) $ (arcs(nn,j)),Qinter(nn,j,d,t,c)) =e= sum((nn,d) $ (arcs(j,nn)),Qinter(j,nn,d,t,c));
+mass_balance_pf(pf,c,t) .. sum((nn,d) $ (arcs(nn,pf)),Qinter(nn,pf,d,t,c)) =e= Qprocess(pf,t,c);
+compute_pipe_cost_per_t(t) .. pipe_cost(t) =e= sum(d,diameter_cost(d) * sum((n,nn) $ (arcs(n,nn)),dist(n,nn) * x_bar(n,nn,d,t)));
+compute_facility_cost_per_t(t) .. facility_cost(t) =e= 1000 * sum((pf,s),facility_cost_size(s) * y_pf(pf,s,t));
+compute_total_cost .. total_cost =e= sum(t,rPower(1 + ir,(-(ord(t) - 1))) * (pipe_cost(t) + facility_cost(t))) / 1000;
+facility_capacity(pf,t,c) $ (tp(t)) .. Qprocess(pf,t,c) =l= accumulated_capacity(pf,t,c);
+pipeline_capacity(n,nn,d,t,c) $ (arcs(n,nn) and tp(t)) .. Qinter(n,nn,d,t,c) =l= maxFlow(c,t) * sum(tt $ (ord(tt) <= ord(t) and tp(tt)),x_bar(n,nn,d,tt));
 unique_capacity(n) .. sum((nn,d,t) $ (arcs(n,nn) and tp(t)),x_bar(n,nn,d,t)) =l= 1;
-def_acum_cap(pf,c,t) .. sum((s,tt) $ (ord(tt) <= ord(t)),(capacity(s,c) * y_pf(pf,s,tt))) =e= accumulated_capacity(pf,t,c);
-compute_pressure_junction(i,j,d,t) $ (arcs(i,j) and tp(t)) .. press(j,t) =l= (fixPress(i,j,d,t) + (maxPress * (1 - sum(tt $ (ord(tt) <= ord(t)),x_bar(i,j,d,tt)))));
-compute_square_pressure_junction(i,j,d,t) $ (arcs(i,j) and tp(t)) .. pressSQ(j,t) =l= ((fixPress(i,j,d,t) * fixPress(i,j,d,t)) + ((maxPress * maxPress) * (1 - sum(tt $ (ord(tt) <= ord(t)),x_bar(i,j,d,tt)))));
+def_acum_cap(pf,c,t) .. sum((s,tt) $ (ord(tt) <= ord(t)),capacity(s,c) * y_pf(pf,s,tt)) =e= accumulated_capacity(pf,t,c);
+compute_pressure_junction(i,j,d,t) $ (arcs(i,j) and tp(t)) .. press(j,t) =l= fixPress(i,j,d,t) + maxPress * (1 - sum(tt $ (ord(tt) <= ord(t)),x_bar(i,j,d,tt)));
+compute_square_pressure_junction(i,j,d,t) $ (arcs(i,j) and tp(t)) .. pressSQ(j,t) =l= fixPress(i,j,d,t) * fixPress(i,j,d,t) + maxPress * maxPress * (1 - sum(tt $ (ord(tt) <= ord(t)),x_bar(i,j,d,tt)));
 min_press_pf(pf,t) .. press(pf,t) =g= pmin_pf;
 min_press_pf_GAS(pf,t) .. pressGAS(pf,t) =g= pmin_pf;
-press_at_pf(j,pf,t) $ arcs(j,pf) .. press(pf,t) =l= ((press(j,t) - deltaP(j,pf,t)) + (maxPress * (1 - sum((d,tt) $ (ord(tt) <= ord(t)),x_bar(j,pf,d,tt)))));
-compute_velLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. vel_liq(j,pf,d,t) =g= ((Qinter(j,pf,d,t,"oil") + Qinter(j,pf,d,t,"water")) / ((((3.141592653589793 * power(diam(d),2)) / 4) * 24) * 3600));
-compute_dpLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. deltaPliq(j,pf,d,t) =g= (((dist(j,pf) * (hffl / 2)) * ((rho_liq * vel_liq(j,pf,d,t)) * vel_liq(j,pf,d,t))) / diam(d));
-weymouth_correlation(j,pf,d,t) $ sel_pipes(j,pf,d) .. ((pressGAS(pf,t) * pressGAS(pf,t)) * 1000000.0) =l= ((pressSQ(j,t) * 1000000.0) - ((QGASinterSQ(j,pf,d,t) * 801.8422896940103) * kw(j,pf,d)));
-compute_dpGAS(j,pf,t) .. deltaPgas(j,pf,t) =e= (press(j,t) - pressGAS(pf,t));
+press_at_pf(j,pf,t) $ (arcs(j,pf)) .. press(pf,t) =l= press(j,t) - deltaP(j,pf,t) + maxPress * (1 - sum((d,tt) $ (ord(tt) <= ord(t)),x_bar(j,pf,d,tt)));
+compute_velLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. vel_liq(j,pf,d,t) =g= (Qinter(j,pf,d,t,"oil") + Qinter(j,pf,d,t,"water")) / (3.141592653589793 * power(diam(d),2) / 4 * 24 * 3600);
+compute_dpLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. deltaPliq(j,pf,d,t) =g= dist(j,pf) * (hffl / 2) * (rho_liq * vel_liq(j,pf,d,t) * vel_liq(j,pf,d,t)) / diam(d);
+weymouth_correlation(j,pf,d,t) $ (sel_pipes(j,pf,d) and tp(t)) .. pressGAS(pf,t) * pressGAS(pf,t) * 1000000.0 =l= pressSQ(j,t) * 1000000.0 - QGASinterSQ(j,pf,d,t) * 801.8422896940103 * kw(j,pf,d);
+compute_dpGAS(j,pf,t) $ (tp(t)) .. deltaPgas(j,pf,t) =e= press(j,t) - pressGAS(pf,t);
 one_interval(j,pf,d,t) $ (sel_pipes(j,pf,d) and tp(t)) .. sum(pw $ (ord(pw) <= allowed_int(j,pf,d)),x_pw(j,pf,d,t,pw)) =e= sum(tt $ (ord(tt) <= ord(t)),x_bar(j,pf,d,tt));
-ixlm_interval(j,pf,d,t,pw) $ ((sel_pipes(j,pf,d) and tp(t)) and (ord(pw) <= allowed_int(j,pf,d))) .. deltaPgas(j,pf,t) =l= ((ixlm_ub(pw,j,pf,d) * deltaPliq(j,pf,d,t)) + (dp_max * (1 - x_pw(j,pf,d,t,pw))));
+ixlm_interval(j,pf,d,t,pw) $ (sel_pipes(j,pf,d) and tp(t) and ord(pw) <= allowed_int(j,pf,d)) .. deltaPgas(j,pf,t) =l= (ixlm_ub(pw,j,pf,d,t) - 1000.0) * deltaPliq(j,pf,d,t) + dp_max * (1 - x_pw(j,pf,d,t,pw));
 compute_deltaPliqYLM(j,pf,d,t) $ (sel_pipes(j,pf,d) and tp(t)) .. deltaPliq(j,pf,d,t) =e= sum(pw $ (ord(pw) <= allowed_int(j,pf,d)),deltaPliqYLM(j,pf,d,t,pw));
-deltaPliqYLM_bound(j,pf,d,t,pw) $ ((sel_pipes(j,pf,d) and tp(t)) and (ord(pw) <= allowed_int(j,pf,d))) .. deltaPliqYLM(j,pf,d,t,pw) =l= (dp_max * x_pw(j,pf,d,t,pw));
-pressure_drop_from_j_to_pf(j,pf,d,t) $ (sel_pipes(j,pf,d) and tp(t)) .. deltaP(j,pf,t) =g= sum(pw $ (ord(pw) <= allowed_int(j,pf,d)),(ylp(pw,j,pf,d) * deltaPliqYLM(j,pf,d,t,pw)));
+deltaPliqYLM_bound(j,pf,d,t,pw) $ (sel_pipes(j,pf,d) and tp(t) and ord(pw) <= allowed_int(j,pf,d)) .. deltaPliqYLM(j,pf,d,t,pw) =l= dp_max * x_pw(j,pf,d,t,pw);
+pressure_drop_from_j_to_pf(j,pf,d,t) $ (sel_pipes(j,pf,d) and tp(t)) .. deltaP(j,pf,t) =g= sum(pw $ (ord(pw) <= allowed_int(j,pf,d)),ylp(pw,j,pf,d,t) * deltaPliqYLM(j,pf,d,t,pw));
 solve Multiphase_network_design using MIQCP MIN total_cost;
