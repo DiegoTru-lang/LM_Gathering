@@ -5,6 +5,7 @@ from .equations import *
 from .fluid_dynamics import compute_multiphase_pressure_drop, compute_weymouth_constant
 from itertools import product
 import sys
+import pandas as pd
 
 class GatheringModel():
     def __init__(self, model_name: str, data: DataClass = None):
@@ -268,38 +269,121 @@ class GatheringModel():
         idx = var_df.columns.get_loc("level")
         return var_df.iloc[:, :idx+1]
     
-    def obtain_record_value(self, var_name: str, record: tuple):
+    def obtain_record_values(self, var_name: str, records: list[tuple]) -> dict[tuple, float | None]:
         var_df = self.obtain_var_df(var_name)
-        idx = len(var_df) - 1
         
+        idx = var_df.columns.get_loc("level")
         key_cols = var_df.columns[:idx]
 
-        if len(record) != len(key_cols):
-            raise ValueError(
-                f"Record length ({len(record)}) does not match number of key columns ({len(key_cols)})."
-            )
+        results = {}
+        for record in records:
+            if len(record) != len(key_cols):
+                raise ValueError(
+                    f"Record {record} length ({len(record)}) does not match number of key columns ({len(key_cols)})."
+                )
 
-        mask = (var_df[key_cols] == record).all(axis=1)
-        row = var_df.loc[mask, "level"]
+            mask = (var_df[key_cols] == record).all(axis=1)
+            row = var_df.loc[mask, "level"]
 
-        if row.empty:
-            return None
-        return row.iloc[0]
+            results[record] = row.iloc[0] if not row.empty else None
+
+        return results
+    
+        # rec_df = pd.DataFrame(records, columns=key_cols)
+
+        # # merge to find matches
+        # merged = rec_df.merge(var_df, on=list(key_cols), how="left")
+
+        # # build dictionary: tuple(record) -> level (or None if missing)
+        # return {
+        #     tuple(row[key_cols]): (row["level"] if pd.notna(row["level"]) else None)
+        #     for _, row in merged.iterrows()
+        # }
 
     def update_selected_pipes(self):
         selected_pipes = self.m["sel_pipes"]
         j = self.m["j"]
 
-        pipes = self.obtain_var_df("x_bar")
-        pipes = pipes[pipes["level"] > 0.5]
+        sel_connect = self.obtain_var_df("x_bar")
+        sel_connect = sel_connect[sel_connect["level"] > 0.5]
 
-        for _, row in pipes.iterrows():
+        for _, row in sel_connect.iterrows():
             if row["n"] not in j.records["n"].values:
                 continue
             else:
                 selected_pipes[row["n"], row["nn"], row["d"]] = True
 
+        return sel_connect
+    
+    def compute_ixlm(self, qoil: float, qgas: float, qwater: float, p_inlet: float, dist: float, diam: float, n: float = 4.12):
+        mpa_to_psi = 145.038
+        _, ixlm, ylp, dp_gas, dp_liq = compute_multiphase_pressure_drop(
+            Qoil=qoil, Qgas=qgas, Qwater=qwater, p_inlet=p_inlet*mpa_to_psi, dist=dist, diam=diam
+        )
+
+        max_incr = p_inlet - self.m["pmin_pf"].records.value[0]
+        ixlm_inf = dp_gas/(max_incr/ylp + dp_liq)
+        ylp_inf = ((ixlm_inf**(1/n))+1)**n
+
+        return (ixlm, ixlm_inf, ylp, ylp_inf)
+
+    def update_ixlm_intervals(self, sel_connect: pd.DataFrame):
+        j = self.m["j"]
+        ixlm_ub = self.m["ixlm_ub"]
+        ylp = self.m["ylp"]
+        pw_list = self.m["pw"].records["uni"]
+        c_list = self.m["c"].records["uni"]
+        tp_list = self.m["tp"].records["t"]
+
+        for _, row in sel_connect.iterrows():
+            if row["n"] not in j.records["n"].values:
+                continue
+            else:
+                j_aux, pf_aux, d_aux = (row["n"], row["nn"], row["d"])
+                dist = self.obtain_record_values("dist", [(j_aux, pf_aux)])[(j_aux, pf_aux)]
+                diam = self.obtain_record_values("diam", [(d_aux)])[(d_aux)]
+                records = [(j_aux, pf_aux, d_aux, t, c) for t in tp_list for c in c_list]
+                press_values = self.obtain_record_values("press", [(j_aux, t) for t in tp_list])
+                qinter_values = self.obtain_record_values("Qinter", records)
+                for t in tp_list:
+                    qoil = qinter_values[(j_aux, pf_aux, d_aux, t, "oil")]
+                    if qoil is None:
+                        continue
+                    qgas = qinter_values[(j_aux, pf_aux, d_aux, t, "gas")]
+                    qwater = qinter_values[(j_aux, pf_aux, d_aux, t, "water")]
+                    p_inlet = press_values[(j_aux, t)]
+                    ixlm, ixlm_inf, ylp, ylp_inf = self.compute_ixlm(qoil=qoil, qgas=qgas, qwater=qwater, p_inlet=p_inlet, dist=dist, diam=diam)
+                    max_int = self.obtain_record_values("allowed_int", [(j_aux, pf_aux, d_aux)])[(j_aux, pf_aux, d_aux)]
+                    if max_int == 1:
+                        ixlm_ub["pw1", j_aux, pf_aux, d_aux] = ixlm_inf
+                        ylp["pw1", j_aux, pf_aux, d_aux] = 1
+                        ixlm_ub["pw2", j_aux, pf_aux, d_aux] = ixlm
+                        ylp["pw2", j_aux, pf_aux, d_aux] = ylp_inf
+                        ixlm_ub["pw3", j_aux, pf_aux, d_aux] = 1
+                        ylp["pw3", j_aux, pf_aux, d_aux] = ylp
+                        self.m["allowed_int"][j_aux, pf_aux, d_aux] = 3
+                    elif max_int > 1:
+                        ixlm_values = self.obtain_record_values("ixlm_ub", [(pw, j_aux, pf_aux, d_aux) for pw in pw_list])
+                        ylp_values = self.obtain_record_values("ylp", [(pw, j_aux, pf_aux, d_aux) for pw in pw_list])
+                        ixlm_list = [v for k, v in ixlm_values.items() if int(k[0][2:]) < max_int]
+                        ylp_list = [v for k, v in ylp_values.items() if int(k[0][2:]) < max_int] #TODO: Verify it the lists are in the same order
+                        ixlm_list += [ixlm_inf, ixlm]
+                        ylp_list += [ylp_inf, ylp]
+                        combined = sorted(zip(ixlm_list, ylp_list), reverse=False)
+
+                        for i in range(len(combined)+1):
+                            ixlm_ub[f"pw{i+1}", j_aux, pf_aux, d_aux] = combined[i][0] if i < len(combined) else 1
+                            ylp[f"pw{i+1}", j_aux, pf_aux, d_aux] = combined[i-1][1] if i > 0 else 1
+                        self.m["allowed_int"][j_aux, pf_aux, d_aux] = 3
+
+
     def solution_algorithm(self):
+        # while {condition}:
+        #   solve model
+        #   new_connections = update selected pipes
+        #   Update pw for selected pipes
+        #   Impose lower bound for next iteration
+        #   warm-start (automatic)
         pass
 
     def predict(self, input_data):
