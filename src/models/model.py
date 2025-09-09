@@ -402,6 +402,7 @@ class GatheringModel():
             # feasibility = check_solution_feasibility(self.m)
             # if feasibility:
             #     break
+            # TODO: Update Z_lb
             sel_connect = self.update_selected_pipes()
             records_dict = self.update_ixlm_intervals(sel_connect)
             self.m.setRecords(records_dict)
