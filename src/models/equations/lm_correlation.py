@@ -28,7 +28,7 @@ def lm_correlation(m: Container) -> list[Equation]:
     ixlm_interval = Equation(m, "ixlm_interval", domain=[j,pf,d,t,pw], description= "Impose interval for LM correlation between junction 'j' and processing facility 'pf' during time period 't' ")
     # TODO: Problema puede estar en que deltaPgas no depende de 'd'
     # TODO: Podría sumar un + 10*dp_max*(1 - Sum(tt,where[Ord(tt) <= Ord(t)], x_bar[j,pf,d,tt))
-    ixlm_interval[j,pf,d,t,pw].where[tp[t] & (Ord(pw) <= allowed_int[j,pf,d,t])] =  deltaPgas[j,pf,t] <= (ixlm_ub[pw,j,pf,d,t] - 1e3)*deltaPliq[j,pf,d,t] + 10*dp_max*(1 - x_pw[j,pf,d,t,pw]) + 10*dp_max*(1 - Sum(tt.where[(Ord(tt) <= Ord(t)) & tp[tt]], x_bar[j,pf,d,tt]))
+    ixlm_interval[j,pf,d,t,pw].where[tp[t] & (Ord(pw) <= allowed_int[j,pf,d,t])] =  deltaPgas[j,pf,t] <= (ixlm_ub[pw,j,pf,d,t] - 1e-3)*deltaPliq[j,pf,d,t] + 10*dp_max*(1 - x_pw[j,pf,d,t,pw])
     # ixlm_interval[j,pf,d,t,pw].where[tp[t] & (Ord(pw) <= allowed_int[j,pf,d,t])] =  deltaPgas[j,pf,t] <= (ixlm_ub[pw,j,pf,d,t] - 1e3)*deltaPliq[j,pf,d,t] + 10*dp_max*(1 - x_pw[j,pf,d,t,pw])
     # ixlm_interval[j,pf,d,t,pw].where[selected_pipes[j,pf,d] & tp[t] & (Ord(pw) <= allowed_int[j,pf,d,t])] =  deltaPgas[j,pf,t] <= (ixlm_ub[pw,j,pf,d,t] - 1e3)*deltaPliq[j,pf,d,t] + dp_max*(1 - x_pw[j,pf,d,t,pw])
 

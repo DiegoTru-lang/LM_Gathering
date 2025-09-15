@@ -477,10 +477,11 @@ class GatheringModel():
         while not feasibility and it < max_iterations:
             print(f"--- Iteration {it+1} ---")
             self.solve(solver=solver_opts.get("solver", "gurobi"), gap=solver_opts.get("gap", 0.0001), max_time=solver_opts.get("max_time", 300.0))
-            self.export_gdx(path=scenario_name, run_name=f"iteration_{it+1}")
+            # self.export_gdx(path=scenario_name, run_name=f"iteration_{it+1}")
             sel_connect = self.update_selected_pipes()
             feasibility, records_dict = self.update_ixlm_intervals(sel_connect)
             self.m.setRecords(records_dict)
+            self.export_gdx(path=scenario_name, run_name=f"iteration_{it+1}")
             it += 1
 
         return (feasibility, it)
