@@ -8,6 +8,7 @@ import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
+from math import pi, sqrt
 
 class GatheringModel():
     def __init__(self, model_name: str, data: DataClass = None):
@@ -318,7 +319,6 @@ class GatheringModel():
         model.toGams(path=output_path)
         # TODO: export plot to same path
 
-
     def obtain_var_df(self, var_name: str, value_col: str = "level") -> pd.DataFrame:
         var_df = self.m[var_name].records
         idx = var_df.columns.get_loc(value_col)
@@ -372,103 +372,127 @@ class GatheringModel():
 
         return sel_connect
     
-    def compute_ixlm(self, qoil: float, qgas: float, qwater: float, p_inlet: float, dist: float, diam: float, n: float = 4.12):
+    def compute_ixlm(self, qoil: float, qgas: float, qwater: float, p_inlet: float, dist: float, diam: float, kw_gas, n: float = 4.12):
         mpa_to_psi = 145.038
-        dp, ixlm, ylp, dp_gas, dp_liq = compute_multiphase_pressure_drop(
-            Qoil=qoil, Qgas=qgas, Qwater=qwater, p_inlet=p_inlet*mpa_to_psi, dist=dist, diam=diam
-        )
+        m3_to_cf = 35.3147
+        bbl_to_m3 = 0.158987
+        in_to_m = 0.0254
+        mile_to_km = 1.60934
+        hffl = self.m["hffl"].records.value[0]
+        rho_liq = self.m["rho_liq"].records.value[0]
+        min_pressure = self.m["pmin_pf"].records.value[0]
 
-        max_incr = p_inlet - self.m["pmin_pf"].records.value[0]
+        # dp, ixlm, ylp, dp_gas, dp_liq = compute_multiphase_pressure_drop(
+        #     Qoil=qoil, Qgas=qgas, Qwater=qwater, p_inlet=p_inlet*mpa_to_psi, dist=dist, diam=diam
+        # )
+        
+        ### Compute dpLiq
+        vel_liq = ((qoil + qwater)*bbl_to_m3)/((pi*((diam*in_to_m)**2)/4)*24*3600)
+        dp_liq = ((dist*mile_to_km)*(hffl/2)*(rho_liq*vel_liq*vel_liq)/(diam*in_to_m))/1e3
+
+        ### Compute dpGas
+        pressSQ = (p_inlet*1e3)**2
+        aux = (pressSQ - ((qgas*1e3/m3_to_cf)**2*kw_gas))
+        if aux > 0:
+            pressGAS = sqrt(aux)/1e3
+        else:
+            # pressGAS = min_pressure
+            pressGAS = 0
+
+        dp_gas = p_inlet - pressGAS
+        print(f"p_inlet: {p_inlet}, pressGAS: {pressGAS}, dp_gas: {dp_gas}, dp_liq: {dp_liq}")
+
+        ixlm = dp_gas/dp_liq
+        ylp = ((ixlm**(1/n))+1)**n
+        dp = dp_liq*ylp
+
+        max_incr = p_inlet - min_pressure
         ixlm_inf = dp_gas/(max_incr/ylp + dp_liq)
         ylp_inf = ((ixlm_inf**(1/n))+1)**n
 
         return (dp, ixlm, ixlm_inf, ylp, ylp_inf)
 
     def update_ixlm_intervals(self, last_connections: pd.DataFrame):
+        i = self.m["i"]
         j = self.m["j"]
         ixlm_ub = self.m["ixlm_ub"]
         ixlm_df = self.obtain_var_df("ixlm_ub", value_col="value")
+        ixlm_dict = {tuple(row[:-1]): row[-1] for row in ixlm_df.itertuples(index=False, name=None)}
         ylp = self.m["ylp"]
         ylp_df = self.obtain_var_df("ylp", value_col="value")
-        selected_pipes = self.m["sel_pipes"].records.copy()
+        ylp_dict = {tuple(row[:-1]): row[-1] for row in ylp_df.itertuples(index=False, name=None)}
         allowed_int = self.m["allowed_int"]
         allowed_int_df = self.obtain_var_df("allowed_int", value_col="value")
+        allowed_int_dict = {tuple(row[:-1]): row[-1] for row in allowed_int_df.itertuples(index=False, name=None)}
         pw_list = self.m["pw"].records["uni"]
         c_list = self.m["c"].records["uni"]
         tp_list = self.m["tp"].records["t"]
         dist_df = self.obtain_var_df("dist", value_col="value")
         diams_df = self.obtain_var_df("diam", value_col="value")
-        luq = last_connections[["n","nn","d","t"]].drop_duplicates()
-        t_dict = {(row.n, row.nn, row.d): row.t for row in last_connections.itertuples(index=False)}
-        check = selected_pipes.merge(luq, on=["n","nn","d"], how="left", indicator=True)
-        selected_pipes["last_selected"] = check["_merge"] == "both"
         feasibility = True
-
-        records_dict = {ixlm_ub: [], ylp: [], allowed_int: []}
-        for _, row in selected_pipes.iterrows():
+        fixPress = self.m["fixPress"]
+        fixPress_dict = {(row["i"], row["j"], row["d"], row["t"]): row["value"] for _, row in fixPress.records.iterrows()}
+        init_pressure_dict = {(j, t): 10 for j in j.records["n"].values for t in tp_list}
+        for _, row in last_connections.iterrows():
+            if row["n"] in i.records["n"].values:
+                for t in tp_list:
+                    p_aux = fixPress_dict[(row["n"], row["nn"], row["d"], t)]
+                    if p_aux < init_pressure_dict[(row["nn"], t)]:
+                        init_pressure_dict[(row["nn"], t)] = p_aux
+        
+        for _, row in last_connections.iterrows():
+            if not row["n"] in j.records["n"].values:
+                continue
             j_aux, pf_aux, d_aux = (row["n"], row["nn"], row["d"])
-            max_int_values = self.obtain_record_values("allowed_int", [(j_aux, pf_aux, d_aux, t) for t in tp_list], var_bool=False, var_df=allowed_int_df)
-            if not row["last_selected"]:
-                for t in tp_list:
-                    max_int = max_int_values[(j_aux, pf_aux, d_aux, t)]
-                    if max_int is None:
-                        continue
-                    ixlm_values = self.obtain_record_values("ixlm_ub", [(pw, j_aux, pf_aux, d_aux, t) for pw in [f"pw{i+1}" for i in range(int(max_int))]], var_bool=False, var_df=ixlm_df)
-                    ylp_values = self.obtain_record_values("ylp", [(pw, j_aux, pf_aux, d_aux, t) for pw in [f"pw{i+1}" for i in range(int(max_int))]], var_bool=False, var_df=ylp_df)
-                    for k,v in ixlm_values.items():
-                        records_dict[ixlm_ub].append((k[0], j_aux, pf_aux, d_aux, t, float(v)))
-                        records_dict[ylp].append((k[0], j_aux, pf_aux, d_aux, t, float(ylp_values[k])))
-                    records_dict[allowed_int].append((j_aux, pf_aux, d_aux, t, int(max_int)))
-            else:
-                print(f"Processing node {j_aux} to {pf_aux} with diameter {d_aux}")
-                t_aux = t_dict[(j_aux, pf_aux, d_aux)]
-                dist = dist_df.loc[(dist_df['n'] == j_aux) & (dist_df['nn'] == pf_aux), "value"].values[0]
-                diam = diams_df.loc[diams_df["d"] == d_aux, "value"].values[0]
-                records = [(j_aux, pf_aux, d_aux, t, c) for t in tp_list for c in c_list]
-                # TODO: Debería obtener los dataframes previo a las iteraciones
-                press_values = self.obtain_record_values("press", [(j_aux, t) for t in tp_list])
-                qinter_values = self.obtain_record_values("Qinter", records)
-                
-                for t in tp_list:
-                    max_int = max_int_values[(j_aux, pf_aux, d_aux, t)]
-                    if int(t[1:]) < int(t_aux[1:]):
-                        if max_int is None:
-                            continue
-                        else:
-                            ixlm_values = self.obtain_record_values("ixlm_ub", [(pw, j_aux, pf_aux, d_aux, t) for pw in [f"pw{i+1}" for i in range(int(max_int))]], var_bool=False, var_df=ixlm_df)
-                            ylp_values = self.obtain_record_values("ylp", [(pw, j_aux, pf_aux, d_aux, t) for pw in [f"pw{i+1}" for i in range(int(max_int))]], var_bool=False, var_df=ylp_df)
-                            for k,v in ixlm_values.items():
-                                records_dict[ixlm_ub].append((k[0], j_aux, pf_aux, d_aux, t, float(v)))
-                                records_dict[ylp].append((k[0], j_aux, pf_aux, d_aux, t, float(ylp_values[k])))
-                            records_dict[allowed_int].append((j_aux, pf_aux, d_aux, t, int(max_int)))
 
-                    else:
-                        qoil = qinter_values[(j_aux, pf_aux, d_aux, t, "oil")]
-                        qgas = qinter_values[(j_aux, pf_aux, d_aux, t, "gas")]
-                        qwater = qinter_values[(j_aux, pf_aux, d_aux, t, "water")]
-                        if (qoil is None) or (qoil == 0) or (qgas is None) or (qgas == 0) or (qwater is None) or (qwater == 0):
-                            continue
-                        p_inlet = press_values[(j_aux, t)]
-                        dp, ixlm_new, ixlm_inf, ylp_new, ylp_inf = self.compute_ixlm(qoil=qoil, qgas=qgas, qwater=qwater, p_inlet=p_inlet, dist=dist, diam=diam)
-                        if p_inlet - dp < self.m["pmin_pf"].records.value[0]:
-                            feasibility = False
-                        if max_int > 1:
-                            ixlm_values = self.obtain_record_values("ixlm_ub", [(pw, j_aux, pf_aux, d_aux, t) for pw in [f"pw{i+1}" for i in range(int(max_int) - 1)]], var_bool=False, var_df=ixlm_df)
-                            ylp_values = self.obtain_record_values("ylp", [(pw, j_aux, pf_aux, d_aux, t) for pw in [f"pw{i+1}" for i in range(int(max_int) - 1)]], var_bool=False, var_df=ylp_df)
-                            ixlm_list = [v for k, v in ixlm_values.items()]
-                            ylp_list = [v for k, v in ylp_values.items()] #TODO: Verify it the lists are in the same order
-                            ixlm_list += [ixlm_inf, ixlm_new]
-                            ylp_list += [ylp_inf, ylp_new]
-                        else:
-                            ixlm_list = [ixlm_inf, ixlm_new]
-                            ylp_list = [ylp_inf, ylp_new]
-                        combined = sorted(zip(ixlm_list, ylp_list), reverse=False)
+            print(f"Processing node {j_aux} to {pf_aux} with diameter {d_aux}")
 
-                        for i in range(len(combined)+1):
-                            records_dict[ixlm_ub].append((f"pw{i+1}", j_aux, pf_aux, d_aux, t, float(combined[i][0]) if i < len(combined) else 3))
-                            records_dict[ylp].append((f"pw{i+1}", j_aux, pf_aux, d_aux, t, float(combined[i-1][1]) if i > 0 else 1))
-                        records_dict[allowed_int].append((j_aux, pf_aux, d_aux, t, len(combined) + 1))
+            t_aux = row["t"]
+            dist = dist_df.loc[(dist_df['n'] == j_aux) & (dist_df['nn'] == pf_aux), "value"].values[0]
+            diam = diams_df.loc[diams_df["d"] == d_aux, "value"].values[0]
+            records = [(j_aux, pf_aux, d_aux, t, c) for t in tp_list for c in c_list]
+            # TODO: Debería obtener los dataframes previo a las iteraciones
+            press_values = self.obtain_record_values("press", [(j_aux, t) for t in tp_list])
+            qinter_values = self.obtain_record_values("Qinter", records)
             
+            for t in tp_list:
+                max_int = allowed_int_dict[(j_aux, pf_aux, d_aux, t)]
+                if int(t[1:]) >= int(t_aux[1:]):
+                    qoil = qinter_values[(j_aux, pf_aux, d_aux, t, "oil")]
+                    qgas = qinter_values[(j_aux, pf_aux, d_aux, t, "gas")]
+                    qwater = qinter_values[(j_aux, pf_aux, d_aux, t, "water")]
+                    if (qoil is None) or (qoil == 0) or (qgas is None) or (qgas == 0) or (qwater is None) or (qwater == 0):
+                        continue
+                    # p_inlet = press_values[(j_aux, t)]
+                    p_inlet = init_pressure_dict[(j_aux, t)]
+                    kw_gas = self.obtain_record_values("kw", [(j_aux, pf_aux, d_aux)], var_bool=False)[(j_aux, pf_aux, d_aux)]
+                    dp, ixlm_new, ixlm_inf, ylp_new, ylp_inf = self.compute_ixlm(qoil=qoil, qgas=qgas, qwater=qwater, p_inlet=p_inlet, dist=dist, diam=diam, kw_gas=kw_gas)
+                    if p_inlet - dp < self.m["pmin_pf"].records.value[0]:
+                        feasibility = False
+                    if max_int > 1:
+                        ixlm_values = self.obtain_record_values("ixlm_ub", [(pw, j_aux, pf_aux, d_aux, t) for pw in [f"pw{i+1}" for i in range(int(max_int) - 1)]], var_bool=False, var_df=ixlm_df)
+                        ylp_values = self.obtain_record_values("ylp", [(pw, j_aux, pf_aux, d_aux, t) for pw in [f"pw{i+1}" for i in range(int(max_int) - 1)]], var_bool=False, var_df=ylp_df)
+                        ixlm_list = [v for k, v in ixlm_values.items()]
+                        ylp_list = [v for k, v in ylp_values.items()] #TODO: Verify it the lists are in the same order
+                        ixlm_list += [ixlm_inf, ixlm_new]
+                        ylp_list += [ylp_inf, ylp_new]
+                    else:
+                        ixlm_list = [ixlm_inf, ixlm_new]
+                        ylp_list = [ylp_inf, ylp_new]
+                    combined = sorted(zip(ixlm_list, ylp_list), reverse=False)
+
+                    for i in range(len(combined)+1):
+                        ixlm_dict[(f"pw{i+1}", j_aux, pf_aux, d_aux, t)] = float(combined[i][0]) if i < len(combined) else 3
+                        # records_dict[ixlm_ub].append((f"pw{i+1}", j_aux, pf_aux, d_aux, t, float(combined[i][0]) if i < len(combined) else 3))
+                        ylp_dict[(f"pw{i+1}", j_aux, pf_aux, d_aux, t)] = float(combined[i-1][1]) if i > 0 else 1
+                        # records_dict[ylp].append((f"pw{i+1}", j_aux, pf_aux, d_aux, t, float(combined[i-1][1]) if i > 0 else 1))
+                    allowed_int_dict[(j_aux, pf_aux, d_aux, t)] = len(combined) + 1
+                    # records_dict[allowed_int].append((j_aux, pf_aux, d_aux, t, len(combined) + 1))
+        records_dict = {
+            ixlm_ub: [(k[0], k[1], k[2], k[3], k[4], v) for k, v in ixlm_dict.items()],
+            ylp: [(k[0], k[1], k[2], k[3], k[4], v) for k, v in ylp_dict.items()],
+            allowed_int: [(k[0], k[1], k[2], k[3], v) for k, v in allowed_int_dict.items()]
+        }
         return (feasibility, records_dict)
 
     def solution_algorithm(self, scenario_name: str, max_iterations: int = 5, solver_opts: dict = {"solver": "gurobi", "gap": 0.0001, "max_time": 300.0}):

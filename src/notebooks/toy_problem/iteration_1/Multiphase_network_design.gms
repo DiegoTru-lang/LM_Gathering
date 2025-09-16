@@ -10,7 +10,7 @@ Set tp(t) "Time periods where there is a production peak";
 Set c(*) "Flow components";
 Set d(*) "Pipeline diameter options";
 Set s(*) "Facility sizes";
-Set sel_pipes(n,nn,d) "Pipeline connections that were selected in previous iterations of the algorithm" / /;
+Set sel_pipes(n,nn,d) "Pipeline connections that were selected in previous iterations of the algorithm";
 Set pw(*) "Segments for LM correalation piecewise linearization";
 Parameter Qprod(c,t) "Oil production at each node at 't' periods after start-time [BBL per day]";
 Parameter st_time(i) "Production start time of source node 'i' ";
@@ -30,10 +30,10 @@ Parameter fixPress(i,j,d,t) "Pre-computed max pressure at junction 'j' during ti
 Parameter maxPress "Max pressure at node [MPa]" / 1.7236 /;
 Parameter ixlm_ub(pw,j,pf,d,t) "IXLM upper bound for LM interval 'pw' for connection (j,pf,d) at time 't'";
 Parameter ylp(pw,j,pf,d,t) "YLM multiplier for liquid phase for LM interval 'pw' for connection (j,pf,d) at time 't'";
-Parameter allowed_int(j,pf,d) "Order of maximum allowed interval 'pw' ";
+Parameter allowed_int(j,pf,d,t) "Order of maximum allowed interval 'pw' ";
 binary Variable y_pf(pf,s,t) "Equals 1 if a processing facility of size 's' is installed at node 'pf' during time period 't'";
 binary Variable x_bar(n,nn,d,t) "Equals 1 if a pipeline segment of diameter 'd' between nodes 'n' and 'nn' is installed at time period 't'";
-binary Variable x_pw(j,pf,d,t,pw) "Equals 1 if connection 'j' to 'pf' with diameter 'd' lies between ixlm interval of piecewise linearization 'pw' " / /;
+binary Variable x_pw(j,pf,d,t,pw) "Equals 1 if connection 'j' to 'pf' with diameter 'd' lies between ixlm interval of piecewise linearization 'pw' ";
 positive Variable Qinter(n,nn,d,t,c) "Flow of component 'c' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [mscf per day]";
 positive Variable QGASinterSQ(n,nn,d,t) "Squared flow of 'gas' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [(mscf per day)**2]" / /;
 positive Variable Qprocess(pf,t,c) "Amount of component 'c' processed at facility 'pf' during time period 't' [mscf per day]";
@@ -43,7 +43,7 @@ positive Variable pressGAS(pf,t) "Pressure at node 'pf' during time period 't' a
 positive Variable deltaP(n,nn,t) "Pressure drop 'multiphase' between nodes 'n' and 'nn' during time period 't' [MPa]";
 positive Variable deltaPgas(n,nn,t) "Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]";
 positive Variable deltaPliq(n,nn,d,t) "Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]";
-positive Variable deltaPliqYLM(n,nn,d,t,pw) "Intermediate variable equal to pressure drop 'liquid-only' between nodes 'n' and 'nn' with diameter 'd' during time period 't' [MPa]" / /;
+positive Variable deltaPliqYLM(n,nn,d,t,pw) "Intermediate variable equal to pressure drop 'liquid-only' between nodes 'n' and 'nn' with diameter 'd' during time period 't' [MPa]";
 positive Variable vel_liq(n,nn,d,t) "Liquid velocity between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [m/s]";
 positive Variable accumulated_capacity(pf,t,c) "Total accumulated capacity at processing facility 'pf' of component 'c' during time period 't' [mscf per day]";
 positive Variable pipe_cost(t) "Total cost on pipeline installation during time period 't' [kUSD]";
@@ -68,11 +68,11 @@ Equation compute_velLIQ(j,pf,d,t) "Compute liquid velocity assuming liquid-only 
 Equation compute_dpLIQ(j,pf,d,t) "Compute liquid-only pressure drop between nodes 'j' and 'pf' during time period 't' [MPa]";
 Equation weymouth_correlation(j,pf,d,t) "Weymouth correlation for gas-only pressure drop between nodes 'n' and 'nn' during time period 't' assuming diameter 'd' [MPa]" / /;
 Equation compute_dpGAS(j,pf,t) "Compute gas-only pressure drop between nodes 'j' and 'pf' during time period 't' [MPa]";
-Equation one_interval(j,pf,d,t) "Each connection (j, pf, d) must lie between a single 'pw' at each time period 't' " / /;
-Equation ixlm_interval(j,pf,d,t,pw) "Impose interval for LM correlation between junction 'j' and processing facility 'pf' during time period 't' " / /;
-Equation compute_deltaPliqYLM(j,pf,d,t) "Intermediate variable definition" / /;
-Equation deltaPliqYLM_bound(j,pf,d,t,pw) "Fix to 0 intermediate variable if IXLM does not lie between interval 'pw' " / /;
-Equation pressure_drop_from_j_to_pf(j,pf,d,t) "Compute pressure drop from junction 'j' to processing facility 'pf' " / /;
+Equation one_interval(j,pf,d,t) "Each connection (j, pf, d) must lie between a single 'pw' at each time period 't' ";
+Equation ixlm_interval(j,pf,d,t,pw) "Impose interval for LM correlation between junction 'j' and processing facility 'pf' during time period 't' ";
+Equation compute_deltaPliqYLM(j,pf,d,t) "Intermediate variable definition";
+Equation deltaPliqYLM_bound(j,pf,d,t,pw) "Fix to 0 intermediate variable if IXLM does not lie between interval 'pw' ";
+Equation pressure_drop_from_j_to_pf(j,pf,d,t) "Compute pressure drop from junction 'j' to processing facility 'pf' ";
 Model Multiphase_network_design / mass_balance_ij,mass_balance_jpf,mass_balance_pf,compute_pipe_cost_per_t,compute_facility_cost_per_t,compute_total_cost,facility_capacity,pipeline_capacity,unique_capacity,def_acum_cap,compute_pressure_junction,compute_square_pressure_junction,min_press_pf,min_press_pf_GAS,press_at_pf,compute_velLIQ,compute_dpLIQ,weymouth_correlation,compute_dpGAS,one_interval,ixlm_interval,compute_deltaPliqYLM,deltaPliqYLM_bound,pressure_drop_from_j_to_pf /;
 $onMultiR
 $gdxLoadAll c:\Users\Diego\Desktop\ExxonMobil\LM_Gathering\src\notebooks\toy_problem\iteration_1\Multiphase_network_design_data.gdx
@@ -92,13 +92,13 @@ compute_square_pressure_junction(i,j,d,t) $ (arcs(i,j) and tp(t)) .. pressSQ(j,t
 min_press_pf(pf,t) .. press(pf,t) =g= pmin_pf;
 min_press_pf_GAS(pf,t) .. pressGAS(pf,t) =g= pmin_pf;
 press_at_pf(j,pf,t) $ (arcs(j,pf)) .. press(pf,t) =l= press(j,t) - deltaP(j,pf,t) + maxPress * (1 - sum((d,tt) $ (ord(tt) <= ord(t)),x_bar(j,pf,d,tt)));
-compute_velLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. vel_liq(j,pf,d,t) =g= (Qinter(j,pf,d,t,"oil") + Qinter(j,pf,d,t,"water")) / (3.141592653589793 * power(diam(d),2) / 4 * 24 * 3600);
-compute_dpLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. deltaPliq(j,pf,d,t) =g= dist(j,pf) * (hffl / 2) * (rho_liq * vel_liq(j,pf,d,t) * vel_liq(j,pf,d,t)) / diam(d);
+compute_velLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. vel_liq(j,pf,d,t) =g= (Qinter(j,pf,d,t,"oil") + Qinter(j,pf,d,t,"water")) * 0.158987 / (3.141592653589793 * power(diam(d) * 0.0254,2) / 4 * 24 * 3600);
+compute_dpLIQ(j,pf,d,t) $ (arcs(j,pf) and tp(t)) .. deltaPliq(j,pf,d,t) * 1000.0 =g= dist(j,pf) * 1.60934 * (hffl / 2) * (rho_liq * vel_liq(j,pf,d,t) * vel_liq(j,pf,d,t)) / (diam(d) * 0.0254);
 weymouth_correlation(j,pf,d,t) $ (sel_pipes(j,pf,d) and tp(t)) .. pressGAS(pf,t) * pressGAS(pf,t) * 1000000.0 =l= pressSQ(j,t) * 1000000.0 - QGASinterSQ(j,pf,d,t) * 801.8422896940103 * kw(j,pf,d);
 compute_dpGAS(j,pf,t) $ (tp(t)) .. deltaPgas(j,pf,t) =e= press(j,t) - pressGAS(pf,t);
-one_interval(j,pf,d,t) $ (sel_pipes(j,pf,d) and tp(t)) .. sum(pw $ (ord(pw) <= allowed_int(j,pf,d)),x_pw(j,pf,d,t,pw)) =e= sum(tt $ (ord(tt) <= ord(t)),x_bar(j,pf,d,tt));
-ixlm_interval(j,pf,d,t,pw) $ (sel_pipes(j,pf,d) and tp(t) and ord(pw) <= allowed_int(j,pf,d)) .. deltaPgas(j,pf,t) =l= (ixlm_ub(pw,j,pf,d,t) - 1000.0) * deltaPliq(j,pf,d,t) + dp_max * (1 - x_pw(j,pf,d,t,pw));
-compute_deltaPliqYLM(j,pf,d,t) $ (sel_pipes(j,pf,d) and tp(t)) .. deltaPliq(j,pf,d,t) =e= sum(pw $ (ord(pw) <= allowed_int(j,pf,d)),deltaPliqYLM(j,pf,d,t,pw));
-deltaPliqYLM_bound(j,pf,d,t,pw) $ (sel_pipes(j,pf,d) and tp(t) and ord(pw) <= allowed_int(j,pf,d)) .. deltaPliqYLM(j,pf,d,t,pw) =l= dp_max * x_pw(j,pf,d,t,pw);
-pressure_drop_from_j_to_pf(j,pf,d,t) $ (sel_pipes(j,pf,d) and tp(t)) .. deltaP(j,pf,t) =g= sum(pw $ (ord(pw) <= allowed_int(j,pf,d)),ylp(pw,j,pf,d,t) * deltaPliqYLM(j,pf,d,t,pw));
+one_interval(j,pf,d,t) $ (tp(t)) .. sum(pw $ (ord(pw) <= allowed_int(j,pf,d,t)),x_pw(j,pf,d,t,pw)) =e= 1;
+ixlm_interval(j,pf,d,t,pw) $ (tp(t) and ord(pw) <= allowed_int(j,pf,d,t)) .. deltaPgas(j,pf,t) =l= (ixlm_ub(pw,j,pf,d,t) - 0.001) * deltaPliq(j,pf,d,t) + 10 * dp_max * (1 - x_pw(j,pf,d,t,pw));
+compute_deltaPliqYLM(j,pf,d,t) $ (tp(t)) .. deltaPliq(j,pf,d,t) =e= sum(pw $ (ord(pw) <= allowed_int(j,pf,d,t)),deltaPliqYLM(j,pf,d,t,pw));
+deltaPliqYLM_bound(j,pf,d,t,pw) $ (tp(t) and ord(pw) <= allowed_int(j,pf,d,t)) .. deltaPliqYLM(j,pf,d,t,pw) =l= 10 * dp_max * x_pw(j,pf,d,t,pw);
+pressure_drop_from_j_to_pf(j,pf,d,t) $ (tp(t)) .. deltaP(j,pf,t) =g= sum(pw $ (ord(pw) <= allowed_int(j,pf,d,t)),ylp(pw,j,pf,d,t) * deltaPliqYLM(j,pf,d,t,pw));
 solve Multiphase_network_design using MIQCP MIN total_cost;
