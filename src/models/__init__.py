@@ -1,3 +1,4 @@
-from .model import GatheringModel
+from .NetworkModel import MultiphaseNetworkModel
+from .GatheringModel import GatheringModel
 from .data_classes import DataClass, read_input
 from .fluid_dynamics import compute_multiphase_pressure_drop, compute_gas_pressure_drop, compute_liquid_pressure_drop

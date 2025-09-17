@@ -15,15 +15,15 @@ def mass_balances(m: Container) -> list[Equation]:
     q_prod = m["Qprod"]
     st_time = m["st_time"]
     q_inter = m["Qinter"]
-    qGAS_interSQ = m["QGASinterSQ"]
+    q_interSQ = m["QinterSQ"]
     q_process = m["Qprocess"]
     
     mass_balance_ij = Equation(m, "mass_balance_ij", domain=[i,c,t], description="Mass balance for source-junction")
     mass_balance_jpf = Equation(m, "mass_balance_jpf", domain=[j,c,t], description="Mass balance for junction-processing facility")
     mass_balance_pf = Equation(m, "mass_balance_pf", domain=[pf,c,t], description="Mass balance for processing facility")
 
-    gasSQ_mass_balance_ij = Equation(m, "gasSQ_mass_balance_ij", domain=[i,t], description="Mass balance for source-junction for squared gas flow")
-    gasSQ_mass_balance_jpf = Equation(m, "gasSQ_mass_balance_jpf", domain=[j,t], description="Mass balance for junction-processing facility for squared gas flow")
+    SQ_mass_balance_ij = Equation(m, "SQ_mass_balance_ij", domain=[i,t,c], description="Mass balance for source-junction for squared flow")
+    SQ_mass_balance_jpf = Equation(m, "SQ_mass_balance_jpf", domain=[j,t,c], description="Mass balance for junction-processing facility for squared flow")
 
     # mass_balance[i, c, t] =  q_prod[i, t, c] + Sum(Domain(nn, d).where[arcs[nn, i]], q_inter[nn, i, d, t, c]) == Sum(Domain(nn, d).where[arcs[i, nn]], q_inter[i, nn, d, t, c])
     # mass_balance[i, c, t] =  q_prod[i, t, c] == Sum(Domain(nn, d).where[arcs[i, nn]], q_inter[i, nn, d, t, c])
@@ -32,7 +32,7 @@ def mass_balances(m: Container) -> list[Equation]:
     # mass_balance[pf, c, t] = Sum(Domain(nn, d).where[arcs[nn, pf]], q_inter[nn, pf, d, t, c]) == Sum(Domain(nn, d).where[arcs[pf, nn]], q_inter[pf, nn, d, t, c]) + q_process[pf, t, c]
     mass_balance_pf[pf, c, t] = Sum(Domain(nn, d).where[arcs[nn, pf]], q_inter[nn, pf, d, t, c]) == q_process[pf, t, c]
 
-    gasSQ_mass_balance_ij[i, t].where[Ord(t) >= (st_time[i])] =  Sum(tt.where[Ord(tt) == (Ord(t) + 1 - st_time[i])], q_prod['gas', tt]**2) == Sum(Domain(nn, d).where[arcs[i, nn]], qGAS_interSQ[i, nn, d, t])
-    gasSQ_mass_balance_jpf[j, t] =  Sum(Domain(nn, d).where[arcs[nn, j]], qGAS_interSQ[nn, j, d, t]) == Sum(Domain(nn, d).where[arcs[j, nn]], qGAS_interSQ[j, nn, d, t])
+    SQ_mass_balance_ij[i, t, c].where[Ord(t) >= (st_time[i])] =  Sum(tt.where[Ord(tt) == (Ord(t) + 1 - st_time[i])], q_prod[c, tt]**2)/1e6 == Sum(Domain(nn, d).where[arcs[i, nn]], q_interSQ[i, nn, d, t, c])
+    SQ_mass_balance_jpf[j, t, c] =  Sum(Domain(nn, d).where[arcs[nn, j]], q_interSQ[nn, j, d, t, c]) == Sum(Domain(nn, d).where[arcs[j, nn]], q_interSQ[j, nn, d, t, c])
 
-    return [mass_balance_ij, mass_balance_jpf, mass_balance_pf]
+    return [mass_balance_ij, mass_balance_jpf, mass_balance_pf, SQ_mass_balance_ij, SQ_mass_balance_jpf]
