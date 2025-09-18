@@ -9,6 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import networkx as nx
 from math import pi, sqrt
+from math import pi, sqrt
 
 class MultiphaseNetworkModel():
     def __init__(self, model_name: str, data: DataClass = None):
