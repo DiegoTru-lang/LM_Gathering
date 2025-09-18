@@ -58,7 +58,7 @@ def generate_random_wells_dirichlet(
                     # Multiplicative noise ~ N(1, noise_level)
                     value *= rng.normal(loc=1.0, scale=noise_level)
                     value = max(value, 0)  # prevent negatives
-                result[(t+1, f"Well{w+1}", comp)] = value
+                result[(t+1, f"i{w+1}", comp)] = value
     
     return result
 

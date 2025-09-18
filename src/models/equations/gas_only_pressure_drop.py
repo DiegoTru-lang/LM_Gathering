@@ -13,7 +13,7 @@ def gas_only_pressure_drop(m: Container) -> list[Equation]:
     press = m["press"]
     pressSQ = m["pressSQ"]
     pressGAS = m["pressGAS"]
-    q_interSQ = m["QinterSQ"]
+    q_inter = m["Qinter"]
     kw = m["kw"]
 
     m3_to_cf = 35.3147
@@ -22,7 +22,9 @@ def gas_only_pressure_drop(m: Container) -> list[Equation]:
     # weymouth_correlation = Equation(m, "weymouth_correlation", domain=[n,nn,t], description=" Weymouth correlation for gas-only pressure drop between nodes 'n' and 'nn' during time period 't' [MPa]")
     # Units: pressSQ [MPa^2] --> [kPa^2]; qGAS_interSQ [(kscf/d)^2] -> [(m3/d)^2]
     # weymouth_correlation[j,pf,d,t].where[arcs[j,pf]] =  pressGAS[pf, t] <= sqrt(pressSQ[j,t]*(1e3**2) - (qGAS_interSQ[j, pf, d, t]*((1e3/m3_to_cf)**2))*kw[j,pf,d])/1e3 # kPa --> MPa
-    weymouth_correlation[j,pf,d,t].where[selected_pipes[j,pf,d] & tp[t]] =  (pressGAS[pf, t]*pressGAS[pf, t])*(1e3**2) <= pressSQ[j,t]*(1e3**2) - ((q_interSQ[j, pf, d, t, 'gas']*1e6)*(1e3/m3_to_cf)*kw[j,pf,d])**2 # kPa --> MPa
+    # weymouth_correlation[j,pf,d,t].where[selected_pipes[j,pf,d] & tp[t]] =  (pressGAS[pf, t]*pressGAS[pf, t])*(1e3**2) <= pressSQ[j,t]*(1e3**2) - (q_interSQ[j, pf, d, t, 'gas']*1e6)*((1e3/m3_to_cf*kw[j,pf,d])**2) # kPa --> MPa
+    # weymouth_correlation[j,pf,d,t].where[selected_pipes[j,pf,d] & tp[t]] =  (pressGAS[pf, t]*pressGAS[pf, t])*(1e3)**2 + (q_inter[j, pf, d, t, 'gas']*q_inter[j, pf, d, t, 'gas'])*(1e3/m3_to_cf*kw[j,pf,d])**2 <= pressSQ[j,t]*(1e3**2)  # kPa --> MPa
+    weymouth_correlation[j,pf,d,t].where[selected_pipes[j,pf,d] & tp[t]] =  (pressGAS[pf, t]*pressGAS[pf, t])*(1e3)**2 + (q_inter[j, pf, d, t, 'gas']*q_inter[j, pf, d, t, 'gas'])*(1e3/m3_to_cf*kw[j,pf,d])**2 <= press[j,t]*press[j,t]*(1e3**2)  # kPa --> MPa
 
     compute_dpGAS = Equation(m, "compute_dpGAS", domain=[j,pf,t], description= "Compute gas-only pressure drop between nodes 'j' and 'pf' during time period 't' [MPa]")
     compute_dpGAS[j,pf,t].where[tp[t]] =  deltaPgas[j, pf, t] == press[j,t] - pressGAS[pf,t]

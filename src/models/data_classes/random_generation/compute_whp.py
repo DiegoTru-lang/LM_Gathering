@@ -1,6 +1,6 @@
 import numpy as np
 
-def estimate_whp(oil, gas, water, alpha=0.02, beta=0.005, P_min=100, noise=True):
+def estimate_whp(oil, gas, water, alpha=0.02, beta=0.005, P_min=100, noise=True, unit="psi"):
     """
     Estimate wellhead pressure from production values.
     
@@ -20,6 +20,8 @@ def estimate_whp(oil, gas, water, alpha=0.02, beta=0.005, P_min=100, noise=True)
     pressure = P_min + alpha * (oil + water) + beta * gas
     if noise:
         pressure += np.random.normal(0, 5)  # ±5 psi random noise
+    if unit == "MPa":
+        pressure *= 0.00689476  # convert psi to MPa
     return max(pressure, 0)  # avoid negative pressures
 
 

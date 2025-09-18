@@ -45,4 +45,3 @@ def lm_correlation(m: Container) -> list[Equation]:
     # pressure_drop_from_j_to_pf[j,pf,d,t].where[selected_pipes[j,pf,d] & tp[t]] =  deltaP[j,pf,t] >= Sum(pw.where[Ord(pw) <= allowed_int[j,pf,d,t]], ylp[pw,j,pf,d,t]*deltaPliqYLM[j,pf,d,t,pw])
 
     return [one_interval, ixlm_interval, compute_deltaPliqYLM, deltaPliqYLM_bound, pressure_drop_from_j_to_pf]
-    return [one_interval, compute_deltaPliqYLM, deltaPliqYLM_bound, pressure_drop_from_j_to_pf]

@@ -1,7 +1,9 @@
 from .mass_balances import mass_balances
+from .mass_balances_gathering import mass_balances as mass_balances_gathering
 from .costs_computation import costs_computation
 from .gas_only_pressure_drop import gas_only_pressure_drop
 from .liquid_only_pressure_drop import liquid_only_pressure_drop
 from .capacity import capacity_constraints
+from .capacity_gathering import capacity_constraints as capacity_gathering
 from .pressure_bounds import pressure_bounds
 from .lm_correlation import lm_correlation

@@ -92,7 +92,6 @@ class MultiphaseNetworkModel():
         # xnr = Variable(m, "xnr", domain=[n, nn, d, t], type="binary", description="Equals 1 if a pipeline segment of diameter 'd' between nodes 'n' and 'nn' is installed at time period 't'")
         
         q_inter = Variable(m, "Qinter", type="positive", domain=[n, nn, d, t, c], description="Flow of component 'c' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [mscf per day]")
-        q_interSQ = Variable(m, "QinterSQ", type="positive", domain=[n, nn, d, t, c], description="Squared flow of component 'c' through pipeline segment between nodes 'n' and 'nn' of diameter 'd' during time period 't' [(mscf per day)**2]")
         q_process = Variable(m, "Qprocess", type="positive", domain=[pf, t, c], description="Amount of component 'c' processed at facility 'pf' during time period 't' [mscf per day]")
         press = Variable(m, "press", type="positive", domain=[n, t], description="Pressure at node 'n' during time period 't' [MPa]")
         pressSQ = Variable(m, "pressSQ", type="positive", domain=[n, t], description="Squared pressure at node 'n' during time period 't' [MPa]")
@@ -102,7 +101,7 @@ class MultiphaseNetworkModel():
         deltaPgas = Variable(m, "deltaPgas", type="positive", domain=[n, nn, t], description="Pressure drop 'gas-only' between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [MPa]")
         deltaPliq = Variable(m, "deltaPliq", type="positive", domain=[n, nn, d, t], description="Pressure drop 'liquid-only' between nodes 'n' and 'nn' during time period 't' [MPa]")
         deltaPliqYLM = Variable(m, "deltaPliqYLM", type="positive", domain=[n, nn, d, t, pw], description="Intermediate variable equal to pressure drop 'liquid-only' between nodes 'n' and 'nn' with diameter 'd' during time period 't' [MPa]")
-        vel_liq_sq = Variable(m, "vel_liq_sq", type="positive", domain=[n, nn, d, t], description="Squared liquid velocity between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [m/s]")
+        vel_liq = Variable(m, "vel_liq", type="positive", domain=[n, nn, d, t], description="Liquid velocity between nodes 'n' and 'nn' during time period 't' assuming pipe diameter 'd' [m/s]")
 
         accumulated_capacity = Variable(m, "accumulated_capacity", type="positive", domain=[pf, t, c], description="Total accumulated capacity at processing facility 'pf' of component 'c' during time period 't' [mscf per day]")
         pipe_cost = Variable(m, "pipe_cost", type="positive", domain=t, description="Total cost on pipeline installation during time period 't' [kUSD]")
@@ -405,6 +404,10 @@ class MultiphaseNetworkModel():
         ylp = ((ixlm**(1/n))+1)**n
         dp = dp_liq*ylp
 
+        print(f"Inputs: qoil={qoil}, qgas={qgas}, qwater={qwater}, dist={dist}, diam={diam}, kw_gas={kw_gas}")
+        print(f"Computed values: dp={dp:.2f}, ixlm={ixlm:.2f}, ylp={ylp:.2f}, dp_gas={dp_gas:.2f}, dp_liq={dp_liq:.2f}")
+        print(f"p_inlet={p_inlet}, dp={dp:.2f}, press={p_inlet - dp}")
+
         max_incr = p_inlet - min_pressure
         ixlm_inf = dp_gas/(max_incr/ylp + dp_liq)
         ylp_inf = ((ixlm_inf**(1/n))+1)**n
@@ -460,11 +463,13 @@ class MultiphaseNetworkModel():
                     qoil = qinter_values[(j_aux, pf_aux, d_aux, t, "oil")]
                     qgas = qinter_values[(j_aux, pf_aux, d_aux, t, "gas")]
                     qwater = qinter_values[(j_aux, pf_aux, d_aux, t, "water")]
+                    print(f"  Time {t}: qoil={qoil}, qgas={qgas}, qwater={qwater}")
                     if (qoil is None) or (qoil == 0) or (qgas is None) or (qgas == 0) or (qwater is None) or (qwater == 0):
                         continue
                     # p_inlet = press_values[(j_aux, t)]
                     p_inlet = init_pressure_dict[(j_aux, t)]
                     kw_gas = self.obtain_record_values("kw", [(j_aux, pf_aux, d_aux)], var_bool=False)[(j_aux, pf_aux, d_aux)]
+                    print("FLAG")
                     dp, ixlm_new, ixlm_inf, ylp_new, ylp_inf = self.compute_ixlm(qoil=qoil, qgas=qgas, qwater=qwater, p_inlet=p_inlet, dist=dist, diam=diam, kw_gas=kw_gas)
                     if p_inlet - dp < self.m["pmin_pf"].records.value[0]:
                         feasibility = False
@@ -473,17 +478,20 @@ class MultiphaseNetworkModel():
                         ylp_values = self.obtain_record_values("ylp", [(pw, j_aux, pf_aux, d_aux, t) for pw in [f"pw{i+1}" for i in range(int(max_int) - 1)]], var_bool=False, var_df=ylp_df)
                         ixlm_list = [v for k, v in ixlm_values.items()]
                         ylp_list = [v for k, v in ylp_values.items()] #TODO: Verify it the lists are in the same order
-                        ixlm_list += [ixlm_inf, ixlm_new]
-                        ylp_list += [ylp_inf, ylp_new]
+                        # ixlm_list += [ixlm_inf, ixlm_new]
+                        ixlm_list += [ixlm_new]
+                        # ylp_list += [ylp_inf, ylp_new]
+                        ylp_list += [ylp_new]
                     else:
                         ixlm_list = [ixlm_inf, ixlm_new]
                         ylp_list = [ylp_inf, ylp_new]
                     combined = sorted(zip(ixlm_list, ylp_list), reverse=False)
-
-                    for i in range(len(combined)+1):
-                        ixlm_dict[(f"pw{i+1}", j_aux, pf_aux, d_aux, t)] = float(combined[i][0]) if i < len(combined) else 3
+                    print(combined)
+                    for i in range(len(combined)):
+                        ixlm_dict[(f"pw{i+1}", j_aux, pf_aux, d_aux, t)] = float(combined[i][0])
                         # records_dict[ixlm_ub].append((f"pw{i+1}", j_aux, pf_aux, d_aux, t, float(combined[i][0]) if i < len(combined) else 3))
-                        ylp_dict[(f"pw{i+1}", j_aux, pf_aux, d_aux, t)] = float(combined[i-1][1]) if i > 0 else 1
+                        # ylp_dict[(f"pw{i+1}", j_aux, pf_aux, d_aux, t)] = float(combined[i-1][1]) if i > 0 else 1
+                        ylp_dict[(f"pw{i+1}", j_aux, pf_aux, d_aux, t)] = float(combined[i][1])
                         # records_dict[ylp].append((f"pw{i+1}", j_aux, pf_aux, d_aux, t, float(combined[i-1][1]) if i > 0 else 1))
                     allowed_int_dict[(j_aux, pf_aux, d_aux, t)] = len(combined) + 1
                     # records_dict[allowed_int].append((j_aux, pf_aux, d_aux, t, len(combined) + 1))
